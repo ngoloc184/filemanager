@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import { createClient } from "@/lib/supabase/client";
@@ -105,6 +105,10 @@ export default function DashboardClient({
   const router = useRouter();
   const supabase = createClient();
 
+  useEffect(() => {
+    setBatches(initialBatches);
+  }, [initialBatches]);
+
   const filteredBatches = batches.filter((batch) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -141,6 +145,7 @@ export default function DashboardClient({
 
         let successCount = 0;
         let failCount = 0;
+        const uploadedFiles: UploadedFile[] = [];
 
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
@@ -160,7 +165,7 @@ export default function DashboardClient({
             continue;
           }
 
-          const { error: fileError } = await supabase
+          const { data: uploadedFile, error: fileError } = await supabase
             .from("uploaded_files")
             .insert({
               batch_id: batchData.id,
@@ -168,13 +173,16 @@ export default function DashboardClient({
               storage_path: storagePath,
               file_size: file.size,
               mime_type: file.type || "application/octet-stream",
-            });
+            })
+            .select()
+            .single();
 
           if (fileError) {
             console.error("File record error:", fileError);
             failCount++;
           } else {
             successCount++;
+            uploadedFiles.push(uploadedFile);
           }
         }
 
@@ -187,6 +195,10 @@ export default function DashboardClient({
 
         setShowNewBatchDialog(false);
         setNewBatchComment("");
+        setBatches((previousBatches) => [
+          { ...batchData, uploaded_files: uploadedFiles },
+          ...previousBatches,
+        ]);
         router.refresh();
       } catch (error) {
         toast.error("Failed to create upload batch");
