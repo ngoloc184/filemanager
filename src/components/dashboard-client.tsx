@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import { createClient } from "@/lib/supabase/client";
@@ -104,10 +104,6 @@ export default function DashboardClient({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const supabase = createClient();
-
-  useEffect(() => {
-    setBatches(initialBatches);
-  }, [initialBatches]);
 
   const filteredBatches = batches.filter((batch) => {
     if (!searchQuery) return true;

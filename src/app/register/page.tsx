@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { UserPlus, Eye, EyeOff } from "lucide-react";
+import { toast } from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,23 +16,27 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { toast } from "react-hot-toast";
-import { LogIn, Eye, EyeOff } from "lucide-react";
-import Link from "next/link";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRegister = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
     });
@@ -40,9 +47,15 @@ export default function LoginPage() {
       return;
     }
 
-    toast.success("Login successful!");
-    router.push("/dashboard");
-    router.refresh();
+    if (data.session) {
+      toast.success("Account created successfully!");
+      router.push("/dashboard");
+      router.refresh();
+      return;
+    }
+
+    toast.success("Account created. Check your email to confirm your address.");
+    router.push("/login");
   };
 
   return (
@@ -50,13 +63,13 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
-            <LogIn className="h-6 w-6 text-primary-foreground" />
+            <UserPlus className="h-6 w-6 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl font-bold">File Manager</CardTitle>
-          <CardDescription>Sign in to manage your uploads</CardDescription>
+          <CardTitle className="text-2xl font-bold">Create account</CardTitle>
+          <CardDescription>Register to manage your uploads</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleRegister} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -64,7 +77,7 @@ export default function LoginPage() {
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(event) => setEmail(event.target.value)}
                 required
                 autoComplete="email"
               />
@@ -75,16 +88,18 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
+                  placeholder="At least 6 characters"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(event) => setPassword(event.target.value)}
                   required
-                  autoComplete="current-password"
+                  minLength={6}
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -94,14 +109,27 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm password</Label>
+              <Input
+                id="confirm-password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Re-enter your password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                required
+                minLength={6}
+                autoComplete="new-password"
+              />
+            </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? "Creating account..." : "Create account"}
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{" "}
-            <Link href="/register" className="font-medium text-primary hover:underline">
-              Create one
+            Already have an account?{" "}
+            <Link href="/login" className="font-medium text-primary hover:underline">
+              Sign in
             </Link>
           </p>
         </CardContent>
