@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   FolderOpen,
+  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -79,6 +80,14 @@ export default function DashboardLayout({
             >
               <Upload className="h-4 w-4" />
               Upload Management
+            </Link>
+            <Link
+              href="/contacts"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+              onClick={() => setSidebarOpen(false)}
+            >
+              <UsersRound className="h-4 w-4" />
+              Related users
             </Link>
           </nav>
 

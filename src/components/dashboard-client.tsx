@@ -50,6 +50,8 @@ import {
   Check,
   X,
   Loader2,
+  Globe,
+  Lock,
 } from "lucide-react";
 
 interface UploadedFile {
@@ -60,6 +62,7 @@ interface UploadedFile {
   file_size: number;
   mime_type: string;
   uploaded_at: string;
+  is_public: boolean;
 }
 
 interface Batch {
@@ -320,6 +323,30 @@ export default function DashboardClient({
     document.body.removeChild(link);
   };
 
+  const handleToggleFileVisibility = async (file: UploadedFile) => {
+    const { error } = await supabase
+      .from("uploaded_files")
+      .update({ is_public: !file.is_public })
+      .eq("id", file.id);
+
+    if (error) {
+      toast.error("Failed to update file visibility");
+      return;
+    }
+
+    setBatches((previousBatches) =>
+      previousBatches.map((batch) => ({
+        ...batch,
+        uploaded_files: batch.uploaded_files.map((uploadedFile) =>
+          uploadedFile.id === file.id
+            ? { ...uploadedFile, is_public: !file.is_public }
+            : uploadedFile
+        ),
+      }))
+    );
+    toast.success(file.is_public ? "File is now private" : "File is now public");
+  };
+
   const handleSaveComment = async (batchId: string) => {
     try {
       const { error } = await supabase
@@ -442,6 +469,7 @@ export default function DashboardClient({
           <div className="space-y-4">
             {filteredBatches.map((batch) => {
               const isExpanded = expandedBatch === batch.id;
+              const isOwner = batch.created_by === user.id;
               const totalSize = batch.uploaded_files.reduce(
                 (acc, f) => acc + f.file_size,
                 0
@@ -482,7 +510,7 @@ export default function DashboardClient({
                             {batch.created_by === user.id ? "You" : batch.created_by.slice(0, 8)}
                           </span>
                         </div>
-                        {editingComment === batch.id ? (
+                        {isOwner && editingComment === batch.id ? (
                           <div
                             className="mt-2 flex items-center gap-2"
                             onClick={(e) => e.stopPropagation()}
@@ -517,7 +545,7 @@ export default function DashboardClient({
                             <span className="text-muted-foreground italic">
                               {batch.comment}
                             </span>
-                            <Button
+                            {isOwner && <Button
                               variant="ghost"
                               size="sm"
                               className="h-6 px-1.5"
@@ -527,9 +555,9 @@ export default function DashboardClient({
                               }}
                             >
                               <Edit3 className="h-3 w-3" />
-                            </Button>
+                            </Button>}
                           </div>
-                        ) : (
+                        ) : isOwner ? (
                           <button
                             className="mt-2 text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
                             onClick={(e) => {
@@ -541,10 +569,10 @@ export default function DashboardClient({
                             <Plus className="h-3 w-3" />
                             Add comment
                           </button>
-                        )}
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-2">
-                        <DropdownMenu>
+                        {isOwner && <DropdownMenu>
                           <DropdownMenuTrigger
                             render={
                               <button
@@ -576,7 +604,7 @@ export default function DashboardClient({
                               Delete Batch
                             </DropdownMenuItem>
                           </DropdownMenuContent>
-                        </DropdownMenu>
+                        </DropdownMenu>}
                         {isExpanded ? (
                           <ChevronUp className="h-4 w-4 text-muted-foreground" />
                         ) : (
@@ -608,16 +636,28 @@ export default function DashboardClient({
                                   {formatBytes(file.file_size)} •{" "}
                                   {file.mime_type}
                                 </p>
+                                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                  {file.is_public ? <Globe className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+                                  {file.is_public ? "Public" : "Private"}
+                                </p>
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
-                                <Button
+                                {isOwner && <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 px-2 text-xs"
+                                  onClick={() => handleToggleFileVisibility(file)}
+                                >
+                                  {file.is_public ? "Make private" : "Make public"}
+                                </Button>}
+                                {isOwner && <Button
                                   variant="ghost"
                                   size="sm"
                                   className="h-8 w-8 p-0"
                                   onClick={() => handleDownloadFile(file)}
                                 >
                                   <Download className="h-4 w-4" />
-                                </Button>
+                                </Button>}
                                 <Button
                                   variant="ghost"
                                   size="sm"
