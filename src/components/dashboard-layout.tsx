@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "react-hot-toast";
@@ -12,8 +12,14 @@ import {
   X,
   FolderOpen,
   UsersRound,
+  Search,
+  Trash2,
+  Share2,
+  Clock,
+  History,
 } from "lucide-react";
 import Link from "next/link";
+import StorageUsage from "@/components/files/storage-usage";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -30,6 +36,7 @@ export default function DashboardLayout({
 }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
   const supabase = createClient();
 
   const handleLogout = async () => {
@@ -75,15 +82,83 @@ export default function DashboardLayout({
           <nav className="flex-1 px-4 py-4 space-y-1">
             <Link
               href="/dashboard"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/10 text-primary font-medium"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
+                pathname === "/dashboard" || pathname.startsWith("/dashboard?")
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
               onClick={() => setSidebarOpen(false)}
             >
               <Upload className="h-4 w-4" />
-              Upload Management
+              My Files
+            </Link>
+            <Link
+              href="/recent"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
+                pathname.startsWith("/recent")
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <Clock className="h-4 w-4" />
+              Recent
+            </Link>
+            <Link
+              href="/search"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
+                pathname.startsWith("/search")
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <Search className="h-4 w-4" />
+              Search
+            </Link>
+            <Link
+              href="/shared"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
+                pathname.startsWith("/shared")
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <Share2 className="h-4 w-4" />
+              Shared with me
+            </Link>
+            <Link
+              href="/trash"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
+                pathname.startsWith("/trash")
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <Trash2 className="h-4 w-4" />
+              Trash
+            </Link>
+            <Link
+              href="/activity"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
+                pathname.startsWith("/activity")
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <History className="h-4 w-4" />
+              Activity
             </Link>
             <Link
               href="/contacts"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
+                pathname.startsWith("/contacts")
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
               onClick={() => setSidebarOpen(false)}
             >
               <UsersRound className="h-4 w-4" />
@@ -92,6 +167,9 @@ export default function DashboardLayout({
           </nav>
 
           <div className="p-4 border-t border-gray-200">
+            <div className="mb-2">
+              <StorageUsage />
+            </div>
             <div className="flex items-center gap-3 px-3 py-2">
               <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm font-medium text-gray-600">
                 {user.email?.charAt(0).toUpperCase() || "U"}
@@ -120,7 +198,7 @@ export default function DashboardLayout({
           >
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="text-lg font-semibold">Upload Management</h1>
+          <h1 className="text-lg font-semibold">File Manager</h1>
         </header>
 
         <main className="flex-1 overflow-auto p-4 lg:p-6">{children}</main>

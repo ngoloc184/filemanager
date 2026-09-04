@@ -107,8 +107,8 @@ begin
   end if;
 
   select * into matched_user
-  from public.user_profiles
-  where lower(email) = lower(trim(related_email));
+  from public.user_profiles p
+  where lower(p.email) = lower(trim(related_email));
 
   if not found then
     raise exception 'No registered user found for this email address';

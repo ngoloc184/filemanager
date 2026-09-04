@@ -37,7 +37,15 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
-3. Go to **Storage** and create a new bucket named `uploads`
+3. Run the migrations in `supabase/migrations/` **in filename order**
+   (`202608280001...` through `202608280011...`)
+4. Migrate existing batch data into the new file system (idempotent, safe to re-run):
+
+   ```sql
+   select public.migrate_batches_to_file_system();
+   ```
+
+5. Go to **Storage** and create a new bucket named `uploads`
    - Set it as **Private** (not public)
    - File size limit: 50 MB (or your preference)
 
