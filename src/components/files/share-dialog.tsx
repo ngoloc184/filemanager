@@ -6,7 +6,6 @@ import { format } from "date-fns";
 import { Check, Copy, Link2, Loader2, Trash2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -60,9 +59,6 @@ export default function ShareDialog({
   const [inviting, setInviting] = useState(false);
   const [busyShareId, setBusyShareId] = useState<string | null>(null);
 
-  const [linkPassword, setLinkPassword] = useState("");
-  const [linkExpiry, setLinkExpiry] = useState("");
-  const [linkAllowDownload, setLinkAllowDownload] = useState(true);
   const [creatingLink, setCreatingLink] = useState(false);
   const [busyLinkId, setBusyLinkId] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
@@ -165,17 +161,8 @@ export default function ShareDialog({
     if (kind !== "file" || creatingLink) return;
     setCreatingLink(true);
     try {
-      await createShareLink(resourceId, {
-        password: linkPassword || null,
-        allowDownload: linkAllowDownload,
-        expiresAt: linkExpiry
-          ? new Date(`${linkExpiry}T23:59:59`).toISOString()
-          : null,
-      });
-      toast.success("Share link created");
-      setLinkPassword("");
-      setLinkExpiry("");
-      setLinkAllowDownload(true);
+      await createShareLink(resourceId, { allowDownload: true });
+      toast.success("Public download link created");
       setLinks(await listShareLinks(resourceId));
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -314,37 +301,9 @@ export default function ShareDialog({
                 <Link2 className="h-4 w-4" />
                 Share links
               </h4>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">Password (optional)</Label>
-                  <Input
-                    type="text"
-                    placeholder="None"
-                    value={linkPassword}
-                    onChange={(e) => setLinkPassword(e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Expires (optional)</Label>
-                  <Input
-                    type="date"
-                    value={linkExpiry}
-                    min={format(new Date(), "yyyy-MM-dd")}
-                    onChange={(e) => setLinkExpiry(e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                </div>
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={linkAllowDownload}
-                  onChange={(e) => setLinkAllowDownload(e.target.checked)}
-                  className="rounded border-input"
-                />
-                Allow download
-              </label>
+              <p className="text-xs text-muted-foreground">
+                Anyone with this link can download the file without signing in.
+              </p>
               <Button
                 variant="outline"
                 size="sm"
