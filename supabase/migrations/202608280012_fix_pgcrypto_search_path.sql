@@ -95,3 +95,7 @@ begin
   select fi.id, fi.name, fi.mime_type, fi.size, fi.current_version_id, link.allow_download;
 end;
 $$;
+
+grant execute on function public.create_share_link(uuid, text, text, boolean, timestamptz) to authenticated;
+grant execute on function public.access_share_link(text, text) to authenticated;
+
