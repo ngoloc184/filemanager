@@ -90,6 +90,40 @@ npm run typecheck  # next typegen && tsc --noEmit
 npm run build      # production build
 ```
 
+## SuperApp API (publish files by URL)
+
+Other systems can publish a file with one API call and get back a public
+download URL of the form `https://<domain>/superapp/<file-name>`. Opening that
+URL downloads the file immediately (no page, no button).
+
+Setup:
+1. Run migration `202608280013_superapp_files.sql`.
+2. Set `SUPERAPP_API_KEY` (e.g. `openssl rand -hex 32`) and
+   `SUPABASE_SERVICE_ROLE_KEY` in the server environment (Vercel: Settings >
+   Environment Variables), then redeploy.
+
+Upload (uploading an existing name replaces the file):
+
+```bash
+curl -X POST https://<domain>/api/superapp/files \
+  -H "Authorization: Bearer $SUPERAPP_API_KEY" \
+  -F "file=@./report.pdf" \
+  -F "name=report.pdf"        # optional, defaults to the uploaded file name
+```
+
+Response `201`:
+
+```json
+{ "name": "report.pdf", "size": 12345, "mimeType": "application/pdf",
+  "url": "https://<domain>/superapp/report.pdf" }
+```
+
+Errors: `401` wrong/missing key, `400` missing file or invalid name
+(allowed: letters, digits, `.`, `_`, `-`; max 200 chars), `500/503` storage
+or configuration problems. Download: `GET /superapp/<name>` redirects to a
+60-second signed URL with `Content-Disposition: attachment`; unknown names
+return `404`. On Vercel, request bodies are limited to about 4.5 MB per upload.
+
 ## Project Structure
 
 ```
