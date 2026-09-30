@@ -1,7 +1,6 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import FilesClient from "@/components/files/files-client";
+import { requireUser } from "@/lib/auth";
 
 function PageSkeleton() {
   return (
@@ -16,18 +15,11 @@ function PageSkeleton() {
 }
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const user = await requireUser();
 
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <FilesClient user={{ id: user.id, email: user.email ?? undefined }} />
+      <FilesClient user={user} />
     </Suspense>
   );
 }

@@ -635,6 +635,7 @@ export function PreviewDialog({
         if (isText && file.size <= 2 * 1024 * 1024) {
           try {
             const response = await fetch(signedUrl);
+            if (!response.ok) return;
             const text = await response.text();
             if (!cancelled) setTextContent(text);
           } catch {

@@ -160,31 +160,48 @@ export default function FilesClient({
     window.localStorage.setItem("fm-view", next);
   };
 
+  // Monotonic id of the latest load; responses from older loads are dropped so
+  // quick folder navigation never shows another folder's contents.
+  const loadRequestId = useRef(0);
+  // Tracks the folder currently on screen for callbacks that outlive a render
+  // (e.g. uploads that finish after the user navigated elsewhere).
+  const currentFolderRef = useRef(folderId);
+  useEffect(() => {
+    currentFolderRef.current = folderId;
+  }, [folderId]);
+
   const load = useCallback(async (fid: string | null, silent = false) => {
+    const requestId = ++loadRequestId.current;
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const [folderList, fileList] = await Promise.all([
+      const [folderList, fileList, ancestorList] = await Promise.all([
         listFolders(fid),
         listFiles(fid),
+        fid
+          ? getFolderPath(fid).catch((): FolderAncestor[] => [])
+          : Promise.resolve<FolderAncestor[]>([]),
       ]);
+      if (requestId !== loadRequestId.current) return;
       setFolders(folderList);
       setFiles(fileList);
-      if (fid) {
-        try {
-          setAncestors(await getFolderPath(fid));
-        } catch {
-          setAncestors([]);
-        }
-      } else {
-        setAncestors([]);
-      }
+      setAncestors(ancestorList);
     } catch (err) {
+      if (requestId !== loadRequestId.current) return;
       setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestId.current) setLoading(false);
     }
   }, []);
+
+  /** Silently reloads the listing if `destFolderId` is the folder on screen. */
+  const reloadIfShowing = useCallback(
+    (destFolderId: string | null) => {
+      const current = currentFolderRef.current;
+      if (destFolderId === current) void load(current, true);
+    },
+    [load]
+  );
 
   useEffect(() => {
     // data fetching for the current folder (client-side navigation)
@@ -232,11 +249,9 @@ export default function FilesClient({
           // task already marked failed with cleanup
         }
       }
-      if (anySuccess && destFolderId === folderId) {
-        void load(folderId, true);
-      }
+      if (anySuccess) reloadIfShowing(destFolderId);
     },
-    [user.id, folderId, load]
+    [user.id, reloadIfShowing]
   );
 
   const retryTask = async (localId: string) => {
@@ -251,7 +266,7 @@ export default function FilesClient({
           updateTask(localId, { status, error: taskError }),
         (message) => toast(message)
       );
-      if (task.folderId === folderId) void load(folderId, true);
+      reloadIfShowing(task.folderId);
     } catch {
       // already marked failed
     }
@@ -306,7 +321,7 @@ export default function FilesClient({
     if (!copyTarget) return;
     await copyFile(copyTarget, dest, copyTarget.name, user.id);
     toast.success("Copied");
-    if (dest === folderId) await load(folderId, true);
+    reloadIfShowing(dest);
   };
 
   const handleDownload = async (file: FileRow) => {
@@ -381,22 +396,23 @@ export default function FilesClient({
     });
   };
 
+  /** Runs `action` for every selected item in parallel; returns the failure count. */
+  const runOnSelection = async (
+    folderAction: (id: string) => Promise<void>,
+    fileAction: (id: string) => Promise<void>
+  ): Promise<number> => {
+    const results = await Promise.allSettled([
+      ...Array.from(selectedFolders, (id) => folderAction(id)),
+      ...Array.from(selectedFiles, (id) => fileAction(id)),
+    ]);
+    return results.filter((result) => result.status === "rejected").length;
+  };
+
   const handleBulkMove = async (dest: string | null) => {
-    let failures = 0;
-    for (const id of Array.from(selectedFolders)) {
-      try {
-        await moveFolder(id, dest);
-      } catch {
-        failures += 1;
-      }
-    }
-    for (const id of Array.from(selectedFiles)) {
-      try {
-        await moveFile(id, dest);
-      } catch {
-        failures += 1;
-      }
-    }
+    const failures = await runOnSelection(
+      (id) => moveFolder(id, dest),
+      (id) => moveFile(id, dest)
+    );
     if (failures === 0) toast.success("Moved");
     else toast.error(`Failed to move ${failures} item(s)`);
     clearSelection();
@@ -404,21 +420,7 @@ export default function FilesClient({
   };
 
   const handleBulkDelete = async () => {
-    let failures = 0;
-    for (const id of Array.from(selectedFolders)) {
-      try {
-        await softDeleteFolder(id);
-      } catch {
-        failures += 1;
-      }
-    }
-    for (const id of Array.from(selectedFiles)) {
-      try {
-        await softDeleteFile(id);
-      } catch {
-        failures += 1;
-      }
-    }
+    const failures = await runOnSelection(softDeleteFolder, softDeleteFile);
     if (failures === 0) toast.success("Moved to trash");
     else toast.error(`Failed to delete ${failures} item(s)`);
     clearSelection();

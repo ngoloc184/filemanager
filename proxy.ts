@@ -1,12 +1,13 @@
 import type { NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
+// Public share pages and their download endpoints must work without a session,
+// so they skip the Supabase session refresh entirely.
+const SESSIONLESS_PREFIXES = ["/share/", "/api/public-share/"];
+
 export async function proxy(request: NextRequest) {
-  // Public share pages and their download endpoint must work without a session.
-  if (
-    request.nextUrl.pathname.startsWith("/share/") ||
-    request.nextUrl.pathname.startsWith("/api/public-share/")
-  ) {
+  const { pathname } = request.nextUrl;
+  if (SESSIONLESS_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return;
   }
 

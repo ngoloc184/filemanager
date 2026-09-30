@@ -1,9 +1,17 @@
 import { createClient } from "@/lib/supabase/client";
 import { notifyQuotaChanged } from "@/lib/services/quota";
+import {
+  STORAGE_REMOVE_BATCH_SIZE,
+  UPLOADS_BUCKET,
+  buildStoragePath,
+} from "@/lib/storage";
 import type { FileRow, FileVersion } from "@/lib/types/database";
 
-export const UPLOADS_BUCKET = "uploads";
+export { UPLOADS_BUCKET, sanitizeStorageName } from "@/lib/storage";
+
 const SIGNED_URL_TTL_DOWNLOAD = 60;
+
+type StoragePathRow = { storage_path: string };
 
 export type DownloadableFile = Pick<FileRow, "id" | "name" | "current_version_id">;
 
@@ -102,14 +110,18 @@ export async function getSignedUrl(
   return data.signedUrl;
 }
 
-export async function downloadFile(file: DownloadableFile): Promise<void> {
-  const url = await getSignedUrl(file, SIGNED_URL_TTL_DOWNLOAD);
+function triggerBrowserDownload(url: string, fileName: string): void {
   const link = document.createElement("a");
   link.href = url;
-  link.download = file.name;
+  link.download = fileName;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+export async function downloadFile(file: DownloadableFile): Promise<void> {
+  const url = await getSignedUrl(file, SIGNED_URL_TTL_DOWNLOAD);
+  triggerBrowserDownload(url, file.name);
 }
 
 export async function renameFile(id: string, name: string): Promise<void> {
@@ -157,56 +169,76 @@ export async function restoreFile(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function hardDeleteFile(id: string): Promise<void> {
+/** Removes storage objects in batches the Storage API accepts. */
+async function removeStorageObjects(paths: string[]): Promise<void> {
+  const supabase = createClient();
+  for (let i = 0; i < paths.length; i += STORAGE_REMOVE_BATCH_SIZE) {
+    const chunk = paths.slice(i, i + STORAGE_REMOVE_BATCH_SIZE);
+    const { error } = await supabase.storage.from(UPLOADS_BUCKET).remove(chunk);
+    if (error) throw error;
+  }
+}
+
+/**
+ * Deletes the storage objects returned by `pathsRpc`, then the database rows
+ * via `deleteRpc`. Storage goes first so a failure never leaves orphan objects
+ * without metadata pointing at them.
+ */
+async function hardDelete(
+  pathsRpc: string,
+  pathsArgs: Record<string, unknown> | undefined,
+  deleteRpc: string,
+  deleteArgs: Record<string, unknown> | undefined
+): Promise<unknown> {
   const supabase = createClient();
   const { data: paths, error: pathsError } = await supabase.rpc(
-    "get_file_version_paths",
-    { p_file_id: id }
+    pathsRpc,
+    pathsArgs
   );
   if (pathsError) throw pathsError;
 
-  const storagePaths = ((paths ?? []) as { storage_path: string }[]).map(
-    (row) => row.storage_path
+  await removeStorageObjects(
+    ((paths ?? []) as StoragePathRow[]).map((row) => row.storage_path)
   );
-  if (storagePaths.length > 0) {
-    const { error: storageError } = await supabase.storage
-      .from(UPLOADS_BUCKET)
-      .remove(storagePaths);
-    if (storageError) throw storageError;
-  }
 
-  const { error } = await supabase.rpc("hard_delete_file", { p_id: id });
+  const { data, error } = await supabase.rpc(deleteRpc, deleteArgs);
   if (error) throw error;
   notifyQuotaChanged();
+  return data;
+}
+
+export async function hardDeleteFile(id: string): Promise<void> {
+  await hardDelete(
+    "get_file_version_paths",
+    { p_file_id: id },
+    "hard_delete_file",
+    { p_id: id }
+  );
 }
 
 export async function hardDeleteFolderContents(
   folderId: string
 ): Promise<void> {
-  const supabase = createClient();
-  const { data: paths, error: pathsError } = await supabase.rpc(
+  await hardDelete(
     "get_folder_storage_paths",
-    { p_folder_id: folderId }
+    { p_folder_id: folderId },
+    "hard_delete_folder",
+    { p_id: folderId }
   );
-  if (pathsError) throw pathsError;
+}
 
-  const storagePaths = ((paths ?? []) as { storage_path: string }[]).map(
-    (row) => row.storage_path
+/** Permanently deletes everything in the caller's trash. */
+export async function hardDeleteTrash(): Promise<{
+  folders_deleted: number;
+  files_deleted: number;
+}> {
+  const result = await hardDelete(
+    "get_trash_storage_paths",
+    undefined,
+    "empty_trash",
+    undefined
   );
-  // storage.remove accepts at most 100 paths per call
-  for (let i = 0; i < storagePaths.length; i += 100) {
-    const chunk = storagePaths.slice(i, i + 100);
-    const { error: storageError } = await supabase.storage
-      .from(UPLOADS_BUCKET)
-      .remove(chunk);
-    if (storageError) throw storageError;
-  }
-
-  const { error } = await supabase.rpc("hard_delete_folder", {
-    p_id: folderId,
-  });
-  if (error) throw error;
-  notifyQuotaChanged();
+  return result as { folders_deleted: number; files_deleted: number };
 }
 
 export async function copyFile(
@@ -221,7 +253,12 @@ export async function copyFile(
 
   const newFileId = crypto.randomUUID();
   const newVersionId = crypto.randomUUID();
-  const destPath = `${currentUserId}/${newFileId}/${newVersionId}/${sanitizeStorageName(source.name)}`;
+  const destPath = buildStoragePath(
+    currentUserId,
+    newFileId,
+    newVersionId,
+    source.name
+  );
 
   const { error: copyError } = await supabase.storage
     .from(UPLOADS_BUCKET)
@@ -248,14 +285,6 @@ export async function copyFile(
   }
 }
 
-export function sanitizeStorageName(name: string): string {
-  const cleaned = name
-    .replace(/[\\/:*?"<>|]/g, "_")
-    .replace(/\s+/g, "_")
-    .slice(0, 180);
-  return cleaned || "file";
-}
-
 export async function downloadVersion(
   version: FileVersion,
   fileName: string
@@ -265,12 +294,7 @@ export async function downloadVersion(
     .from(UPLOADS_BUCKET)
     .createSignedUrl(version.storage_path, SIGNED_URL_TTL_DOWNLOAD);
   if (error) throw error;
-  const link = document.createElement("a");
-  link.href = data.signedUrl;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  triggerBrowserDownload(data.signedUrl, fileName);
 }
 
 export async function restoreVersion(

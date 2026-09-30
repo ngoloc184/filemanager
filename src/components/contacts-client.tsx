@@ -15,7 +15,6 @@ export default function ContactsClient({ initialUsers }: { initialUsers: Related
   const [relatedUsers, setRelatedUsers] = useState<RelatedUser[]>(initialUsers);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const supabase = createClient();
 
   const addUser = async (event?: React.FormEvent | React.MouseEvent) => {
     event?.preventDefault();
@@ -32,7 +31,7 @@ export default function ContactsClient({ initialUsers }: { initialUsers: Related
     if (loading) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc("add_related_user", { related_email: trimmed });
+      const { data, error } = await createClient().rpc("add_related_user", { related_email: trimmed });
       if (error) {
         console.error("add_related_user error:", error);
         toast.error(error.message);
@@ -57,7 +56,7 @@ export default function ContactsClient({ initialUsers }: { initialUsers: Related
   };
 
   const removeUser = async (user: RelatedUser) => {
-    const { error } = await supabase.rpc("remove_related_user", { user_id: user.id });
+    const { error } = await createClient().rpc("remove_related_user", { user_id: user.id });
     if (error) {
       console.error("remove_related_user error:", error);
       return toast.error(error.message);

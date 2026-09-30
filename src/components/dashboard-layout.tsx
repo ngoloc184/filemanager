@@ -17,17 +17,34 @@ import {
   Share2,
   Clock,
   History,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import StorageUsage from "@/components/files/storage-usage";
+import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
   children: ReactNode;
-  user: {
-    id: string;
-    email?: string;
-    user_metadata?: Record<string, unknown>;
-  };
+  user: { id: string; email?: string };
+}
+
+const NAV_ITEMS: ReadonlyArray<{
+  href: string;
+  label: string;
+  icon: LucideIcon;
+}> = [
+  { href: "/dashboard", label: "My Files", icon: Upload },
+  { href: "/recent", label: "Recent", icon: Clock },
+  { href: "/search", label: "Search", icon: Search },
+  { href: "/shared", label: "Shared with me", icon: Share2 },
+  { href: "/trash", label: "Trash", icon: Trash2 },
+  { href: "/activity", label: "Activity", icon: History },
+  { href: "/contacts", label: "Related users", icon: UsersRound },
+];
+
+function isActive(pathname: string, href: string): boolean {
+  // "My Files" is only active on the root dashboard route
+  return href === "/dashboard" ? pathname === href : pathname.startsWith(href);
 }
 
 export default function DashboardLayout({
@@ -37,10 +54,9 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const supabase = createClient();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await createClient().auth.signOut();
     toast.success("Logged out");
     router.push("/login");
     router.refresh();
@@ -56,12 +72,12 @@ export default function DashboardLayout({
       )}
 
       <aside
-        className={`
-          fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 
-          transform transition-transform duration-200 ease-in-out
-          lg:translate-x-0 lg:static lg:z-auto
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-        `}
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200",
+          "transform transition-transform duration-200 ease-in-out",
+          "lg:translate-x-0 lg:static lg:z-auto",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        )}
       >
         <div className="flex flex-col h-full">
           <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
@@ -72,7 +88,9 @@ export default function DashboardLayout({
               <span className="font-bold text-lg">File Manager</span>
             </div>
             <button
+              type="button"
               onClick={() => setSidebarOpen(false)}
+              aria-label="Close menu"
               className="lg:hidden text-muted-foreground hover:text-foreground"
             >
               <X className="h-5 w-5" />
@@ -80,90 +98,23 @@ export default function DashboardLayout({
           </div>
 
           <nav className="flex-1 px-4 py-4 space-y-1">
-            <Link
-              href="/dashboard"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
-                pathname === "/dashboard" || pathname.startsWith("/dashboard?")
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <Upload className="h-4 w-4" />
-              My Files
-            </Link>
-            <Link
-              href="/recent"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
-                pathname.startsWith("/recent")
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <Clock className="h-4 w-4" />
-              Recent
-            </Link>
-            <Link
-              href="/search"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
-                pathname.startsWith("/search")
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <Search className="h-4 w-4" />
-              Search
-            </Link>
-            <Link
-              href="/shared"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
-                pathname.startsWith("/shared")
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <Share2 className="h-4 w-4" />
-              Shared with me
-            </Link>
-            <Link
-              href="/trash"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
-                pathname.startsWith("/trash")
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <Trash2 className="h-4 w-4" />
-              Trash
-            </Link>
-            <Link
-              href="/activity"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
-                pathname.startsWith("/activity")
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <History className="h-4 w-4" />
-              Activity
-            </Link>
-            <Link
-              href="/contacts"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
-                pathname.startsWith("/contacts")
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <UsersRound className="h-4 w-4" />
-              Related users
-            </Link>
+            {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg",
+                  isActive(pathname, href)
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+                aria-current={isActive(pathname, href) ? "page" : undefined}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </Link>
+            ))}
           </nav>
 
           <div className="p-4 border-t border-gray-200">
@@ -193,7 +144,9 @@ export default function DashboardLayout({
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-white border-b border-gray-200 flex items-center px-4 lg:px-6 shrink-0">
           <button
+            type="button"
             onClick={() => setSidebarOpen(true)}
+            aria-label="Open menu"
             className="lg:hidden text-muted-foreground hover:text-foreground mr-3"
           >
             <Menu className="h-5 w-5" />

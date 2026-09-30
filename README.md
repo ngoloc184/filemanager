@@ -38,7 +38,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280011...`)
+   (`202608280001...` through `202608280012...`)
 4. Migrate existing batch data into the new file system (idempotent, safe to re-run):
 
    ```sql
@@ -67,7 +67,11 @@ Edit `.env.local` with your Supabase credentials:
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 ```
+
+`SUPABASE_SERVICE_ROLE_KEY` is only read on the server by the public share-link
+endpoints (`/api/public-share/*`). Never expose it with a `NEXT_PUBLIC_` prefix.
 
 ### 5. Run the Development Server
 
@@ -78,22 +82,40 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+### Quality checks
+
+```bash
+npm run lint       # ESLint
+npm run typecheck  # next typegen && tsc --noEmit
+npm run build      # production build
+```
+
 ## Project Structure
 
 ```
+proxy.ts                   # Session refresh + auth redirect (Next.js proxy)
 src/
 ├── app/
-│   ├── api/           # API routes
-│   ├── dashboard/     # Main upload management page
-│   ├── login/         # Login page
-│   └── setup/         # Initial admin setup page
+│   ├── (dashboard)/       # Signed-in area sharing one layout + auth check
+│   │   ├── dashboard/     # My Files (folders, uploads, versions)
+│   │   ├── recent/  search/  shared/  trash/  activity/  contacts/
+│   ├── api/public-share/  # Public share-link download + info endpoints
+│   ├── share/[token]/     # Public share-link landing page
+│   ├── login/  register/  setup/
 ├── components/
-│   ├── ui/            # shadcn/ui components
-│   ├── dashboard-layout.tsx  # Dashboard layout with sidebar
-│   └── dashboard-client.tsx  # Main upload management UI
+│   ├── ui/                # shadcn/ui (base-ui) primitives
+│   ├── files/             # File manager feature components
+│   └── dashboard-layout.tsx
 ├── lib/
-│   ├── supabase/      # Supabase client configuration
-│   └── utils.ts       # Utility functions
+│   ├── auth.ts            # Cached server-side user lookup / requireUser()
+│   ├── public-share.ts    # Server-only share-link validation
+│   ├── storage.ts         # Bucket name + storage path helpers
+│   ├── services/          # Client-side data access (Supabase RPC/Storage)
+│   ├── supabase/          # Browser, server, proxy and admin clients
+│   └── types/
+supabase/
+├── schema.sql
+└── migrations/            # Apply in filename order
 ```
 
 ## Deployment

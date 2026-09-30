@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { lookupShareLink, NO_STORE_HEADERS } from "@/lib/public-share";
 
 export const dynamic = "force-dynamic";
+
+const INACTIVE_LINK_RESPONSES = {
+  not_found: ["Share link not found", 404],
+  disabled: ["This share link has been disabled", 410],
+  expired: ["This share link has expired", 410],
+} as const;
+
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return NextResponse.json(body, { status, headers: NO_STORE_HEADERS });
+}
 
 export async function GET(
   _request: Request,
@@ -11,23 +22,15 @@ export async function GET(
 
   try {
     const supabase = createAdminClient();
-    const { data: link, error: linkError } = await supabase
-      .from("share_links")
-      .select("id, file_id, password_hash, allow_download, expires_at, disabled")
-      .eq("token", token)
-      .maybeSingle();
+    const lookup = await lookupShareLink(supabase, token);
 
-    if (linkError || !link?.file_id) {
-      return NextResponse.json({ error: "Share link not found" }, { status: 404 });
+    if (lookup.status !== "active") {
+      const [error, status] = INACTIVE_LINK_RESPONSES[lookup.status];
+      return jsonResponse({ error }, status);
     }
-    if (link.disabled) {
-      return NextResponse.json({ error: "This share link has been disabled" }, { status: 410 });
-    }
-    if (link.expires_at && new Date(link.expires_at) <= new Date()) {
-      return NextResponse.json({ error: "This share link has expired" }, { status: 410 });
-    }
+    const { link } = lookup;
     if (!link.allow_download) {
-      return NextResponse.json({ error: "Downloads are disabled for this link" }, { status: 403 });
+      return jsonResponse({ error: "Downloads are disabled for this link" }, 403);
     }
 
     const { data: file, error: fileError } = await supabase
@@ -37,10 +40,10 @@ export async function GET(
       .maybeSingle();
 
     if (fileError || !file || file.deleted_at) {
-      return NextResponse.json({ error: "The shared file is no longer available" }, { status: 404 });
+      return jsonResponse({ error: "The shared file is no longer available" }, 404);
     }
 
-    return NextResponse.json({
+    return jsonResponse({
       name: file.name,
       size: file.size,
       mimeType: file.mime_type,
@@ -49,6 +52,6 @@ export async function GET(
     });
   } catch (error) {
     console.error("Fetch shared file info failed", error);
-    return NextResponse.json({ error: "Failed to fetch file info" }, { status: 500 });
+    return jsonResponse({ error: "Failed to fetch file info" }, 500);
   }
 }

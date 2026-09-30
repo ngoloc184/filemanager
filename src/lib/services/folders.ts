@@ -79,12 +79,6 @@ export async function restoreFolder(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function hardDeleteFolder(id: string): Promise<void> {
-  const supabase = createClient();
-  const { error } = await supabase.rpc("hard_delete_folder", { p_id: id });
-  if (error) throw error;
-}
-
 export async function getFolderPath(id: string): Promise<FolderAncestor[]> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("get_folder_ancestors", {
