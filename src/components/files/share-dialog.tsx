@@ -63,54 +63,47 @@ export default function ShareDialog({
   const [busyLinkId, setBusyLinkId] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const shareList =
-        kind === "file"
-          ? await listFileShares(resourceId)
-          : await listFolderShares(resourceId);
-      setShares(shareList);
-    } catch (err) {
-      setShares([]);
-      toast.error(getErrorMessage(err));
-    }
-    if (kind === "file") {
-      try {
-        setLinks(await listShareLinks(resourceId));
-      } catch {
-        setLinks([]);
-      }
-    }
-  }, [kind, resourceId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const shareList =
-          kind === "file"
-            ? await listFileShares(resourceId)
-            : await listFolderShares(resourceId);
-        if (!cancelled) setShares(shareList);
-      } catch (err) {
-        if (!cancelled) {
+  /**
+   * Fetches collaborators and (for files) public links in parallel.
+   * `isCurrent` lets the caller drop results that arrive after unmount.
+   */
+  const load = useCallback(
+    async (isCurrent: () => boolean = () => true) => {
+      const sharesTask = (
+        kind === "file" ? listFileShares(resourceId) : listFolderShares(resourceId)
+      ).then(
+        (shareList) => {
+          if (isCurrent()) setShares(shareList);
+        },
+        (err) => {
+          if (!isCurrent()) return;
           setShares([]);
           toast.error(getErrorMessage(err));
         }
-      }
-      if (kind === "file") {
-        try {
-          const linkList = await listShareLinks(resourceId);
-          if (!cancelled) setLinks(linkList);
-        } catch {
-          if (!cancelled) setLinks([]);
-        }
-      }
-    })();
+      );
+      const linksTask =
+        kind === "file"
+          ? listShareLinks(resourceId).then(
+              (linkList) => {
+                if (isCurrent()) setLinks(linkList);
+              },
+              () => {
+                if (isCurrent()) setLinks([]);
+              }
+            )
+          : Promise.resolve();
+      await Promise.all([sharesTask, linksTask]);
+    },
+    [kind, resourceId]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void load(() => !cancelled);
     return () => {
       cancelled = true;
     };
-  }, [kind, resourceId]);
+  }, [load]);
 
   const invite = async () => {
     const trimmed = email.trim();

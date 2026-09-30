@@ -28,8 +28,11 @@ export default function ShareLinkClient({ token }: { token: string }) {
     let cancelled = false;
     async function fetchInfo() {
       try {
-        const res = await fetch(`/api/public-share/${token}/info`);
-        const data = await res.json();
+        const res = await fetch(
+          `/api/public-share/${encodeURIComponent(token)}/info`,
+          { cache: "no-store" }
+        );
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           throw new Error(data.error || "File is not available");
         }
@@ -94,7 +97,7 @@ export default function ShareLinkClient({ token }: { token: string }) {
               <p className="text-xs text-muted-foreground text-center">
                 No sign-in is required to download this file.
               </p>
-              <Button className="w-full" render={<a href={`/api/public-share/${token}`} />}>
+              <Button className="w-full" render={<a href={`/api/public-share/${encodeURIComponent(token)}`} />}>
                 <Download className="h-4 w-4 mr-2" />
                 Download file
               </Button>

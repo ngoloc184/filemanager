@@ -1,10 +1,21 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { UPLOADS_BUCKET } from "@/lib/services/files";
+import { UPLOADS_BUCKET } from "@/lib/storage";
+import { lookupShareLink, NO_STORE_HEADERS } from "@/lib/public-share";
 
 export const dynamic = "force-dynamic";
 
 const SIGNED_URL_TTL_SECONDS = 60;
+
+const INACTIVE_LINK_RESPONSES = {
+  not_found: ["Share link not found.", 404],
+  disabled: ["This share link has been disabled.", 410],
+  expired: ["This share link has expired.", 410],
+} as const;
+
+function textResponse(message: string, status: number) {
+  return new NextResponse(message, { status, headers: NO_STORE_HEADERS });
+}
 
 /**
  * Downloads the current version of a file shared through a public link.
@@ -19,28 +30,18 @@ export async function GET(
 
   try {
     const supabase = createAdminClient();
-    const { data: link, error: linkError } = await supabase
-      .from("share_links")
-      .select("id, file_id, password_hash, allow_download, expires_at, disabled")
-      .eq("token", token)
-      .maybeSingle();
+    const lookup = await lookupShareLink(supabase, token);
 
-    if (linkError || !link?.file_id) {
-      return new NextResponse("Share link not found.", { status: 404 });
+    if (lookup.status !== "active") {
+      const [message, status] = INACTIVE_LINK_RESPONSES[lookup.status];
+      return textResponse(message, status);
     }
-    if (link.disabled) {
-      return new NextResponse("This share link has been disabled.", { status: 410 });
-    }
-    if (link.expires_at && new Date(link.expires_at) <= new Date()) {
-      return new NextResponse("This share link has expired.", { status: 410 });
-    }
+    const { link } = lookup;
     if (link.password_hash) {
-      return new NextResponse("This share link requires a password.", { status: 403 });
+      return textResponse("This share link requires a password.", 403);
     }
     if (!link.allow_download) {
-      return new NextResponse("Downloads are disabled for this share link.", {
-        status: 403,
-      });
+      return textResponse("Downloads are disabled for this share link.", 403);
     }
 
     const { data: file, error: fileError } = await supabase
@@ -50,9 +51,7 @@ export async function GET(
       .maybeSingle();
 
     if (fileError || !file || file.deleted_at || !file.current_version_id) {
-      return new NextResponse("The shared file is no longer available.", {
-        status: 404,
-      });
+      return textResponse("The shared file is no longer available.", 404);
     }
 
     const { data: version, error: versionError } = await supabase
@@ -62,9 +61,7 @@ export async function GET(
       .maybeSingle();
 
     if (versionError || !version) {
-      return new NextResponse("The shared file is no longer available.", {
-        status: 404,
-      });
+      return textResponse("The shared file is no longer available.", 404);
     }
 
     const { data: signedUrl, error: signedUrlError } = await supabase.storage
@@ -74,17 +71,23 @@ export async function GET(
       });
 
     if (signedUrlError || !signedUrl) {
-      return new NextResponse("Unable to prepare the download.", { status: 500 });
+      return textResponse("Unable to prepare the download.", 500);
     }
 
-    void supabase
-      .from("share_links")
-      .update({ last_used_at: new Date().toISOString() })
-      .eq("id", link.id);
+    // Record usage without delaying the download.
+    after(async () => {
+      const { error } = await supabase
+        .from("share_links")
+        .update({ last_used_at: new Date().toISOString() })
+        .eq("id", link.id);
+      if (error) console.error("Failed to record share link usage", error);
+    });
 
-    return NextResponse.redirect(signedUrl.signedUrl);
+    const response = NextResponse.redirect(signedUrl.signedUrl);
+    response.headers.set("Cache-Control", NO_STORE_HEADERS["Cache-Control"]);
+    return response;
   } catch (error) {
     console.error("Public share download failed", error);
-    return new NextResponse("Public file sharing is unavailable.", { status: 503 });
+    return textResponse("Public file sharing is unavailable.", 503);
   }
 }
