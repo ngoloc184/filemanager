@@ -1,6 +1,8 @@
 // Response headers for files served at /superapp/<name>. Framework-free so
 // they can be unit tested with `node --test`.
 
+import { isValidVersion } from "./superapp-versions.ts";
+
 const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
   ".json": "application/json",
   ".bundle": "application/javascript",
@@ -20,8 +22,18 @@ export function contentTypeFor(name: string, storedMimeType: string): string {
   );
 }
 
-export function cacheHeadersFor(url: URL): Record<string, string> {
-  if (url.searchParams.get("v")) {
+/** The `v` query parameter when it is a valid `x.y.z` version, else null. */
+export function requestedVersion(url: URL): string | null {
+  const v = url.searchParams.get("v");
+  return isValidVersion(v) ? v : null;
+}
+
+/**
+ * Only an exact (name, version) snapshot may be cached as immutable; any
+ * fallback content gets the short cache so a later upload is picked up.
+ */
+export function cacheHeadersFor(immutable: boolean): Record<string, string> {
+  if (immutable) {
     return {
       "Cache-Control": IMMUTABLE_CACHE_CONTROL,
       // Vercel's CDN only caches on s-maxage/CDN headers; this Vercel-only

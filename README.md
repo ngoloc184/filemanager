@@ -124,13 +124,26 @@ Errors: `401` wrong/missing key, `400` missing file or invalid name
 or configuration problems. On Vercel, request bodies are limited to about
 4.5 MB per upload.
 
+Versioned uploads: add `-F "version=0.2.0"` to store the file as that
+version's snapshot (run migration `202608280015_superapp_files_versioned.sql`).
+Each (name, version) pair is kept separately, so older versions stay
+downloadable; the response `url` then ends with `?v=0.2.0`. Without `version`
+the upload behaves as before (one unversioned copy per name).
+
 Download: `GET`/`HEAD /superapp/<name>` returns the file directly (`200`, no
 redirect) with `Content-Type` (`.json` -> `application/json`, `.bundle` ->
-`application/javascript`, otherwise the uploaded type) and `Content-Length`.
-With `?v=<version>` the response is `Cache-Control: public, max-age=31536000,
-immutable` (also cached for a year on Vercel's CDN), so publish changed
-content under a new version. Without `v` it is cached for 60 s on the CDN
-(`stale-while-revalidate=86400`). Unknown names return `404`.
+`application/javascript`, otherwise the uploaded type), `Content-Length` and
+`X-SuperApp-Version` (the snapshot served, or `unversioned`).
+
+| Request | Served file | Cache-Control |
+|---|---|---|
+| `?v=X`, snapshot X exists | snapshot X | `public, max-age=31536000, immutable` (+1 year on Vercel CDN) |
+| `?v=X`, no snapshot X | unversioned copy if any, else `404` | short (below) / `no-store` |
+| no `v` | most recently uploaded copy | `public, max-age=0, s-maxage=60, stale-while-revalidate=86400` |
+
+Publishing order for a release: upload every file with `version=X`, then
+`PUT /api/superapp/versions/<app>` with `X`, so apps only learn about a
+version once its files exist.
 
 ### Mini-app versions
 

@@ -4,15 +4,25 @@ import { createHash, timingSafeEqual } from "node:crypto";
 /** Public files are addressed by name: letters, digits, ".", "_" and "-". */
 const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
 
-/** Storage prefix for SuperApp files; kept apart from per-user folders. */
+/** Storage prefixes for SuperApp files; kept apart from per-user folders. */
 const STORAGE_PREFIX = "superapp";
+const VERSIONED_STORAGE_PREFIX = "superapp-v";
 
 export function isValidSuperAppName(name: string): boolean {
   return NAME_PATTERN.test(name);
 }
 
-export function superAppStoragePath(name: string): string {
-  return `${STORAGE_PREFIX}/${name}`;
+/**
+ * Object key of a published file: `superapp-v/<version>/<name>` for a
+ * versioned snapshot, `superapp/<name>` for an unversioned (legacy) upload.
+ */
+export function superAppStoragePath(
+  name: string,
+  version: string | null = null
+): string {
+  return version
+    ? `${VERSIONED_STORAGE_PREFIX}/${version}/${name}`
+    : `${STORAGE_PREFIX}/${name}`;
 }
 
 /**
