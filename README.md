@@ -87,6 +87,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ```bash
 npm run lint       # ESLint
 npm run typecheck  # next typegen && tsc --noEmit
+npm test           # unit tests (node:test)
 npm run build      # production build
 ```
 
@@ -120,9 +121,36 @@ Response `201`:
 
 Errors: `401` wrong/missing key, `400` missing file or invalid name
 (allowed: letters, digits, `.`, `_`, `-`; max 200 chars), `500/503` storage
-or configuration problems. Download: `GET /superapp/<name>` redirects to a
-60-second signed URL with `Content-Disposition: attachment`; unknown names
-return `404`. On Vercel, request bodies are limited to about 4.5 MB per upload.
+or configuration problems. On Vercel, request bodies are limited to about
+4.5 MB per upload.
+
+Download: `GET`/`HEAD /superapp/<name>` returns the file directly (`200`, no
+redirect) with `Content-Type` (`.json` -> `application/json`, `.bundle` ->
+`application/javascript`, otherwise the uploaded type) and `Content-Length`.
+With `?v=<version>` the response is `Cache-Control: public, max-age=31536000,
+immutable` (also cached for a year on Vercel's CDN), so publish changed
+content under a new version. Without `v` it is cached for 60 s on the CDN
+(`stale-while-revalidate=86400`). Unknown names return `404`.
+
+### Mini-app versions
+
+Run migration `202608280014_superapp_versions.sql`.
+
+```bash
+# Public, never cached
+curl https://<domain>/api/superapp/versions
+# {"miniApps":{"transfer":{"version":"0.2.0","updatedAt":"2026-10-01T02:26:04.000Z"}}}
+
+# Publish a newer version (same key as uploads)
+curl -X PUT https://<domain>/api/superapp/versions/transfer \
+  -H "Authorization: Bearer $SUPERAPP_API_KEY" \
+  -H "Content-Type: application/json" -d '{"version":"0.2.0"}'
+```
+
+`PUT` returns `200` `{ name, version, updatedAt }`, `401` without a valid key,
+`400` for a bad name (`^[a-z0-9][a-z0-9_-]{0,63}$`) or version (`x.y.z`), and
+`409` unless the version is numerically greater than the current one
+(`0.10.0` > `0.9.0`).
 
 ## Project Structure
 
