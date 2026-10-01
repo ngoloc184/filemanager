@@ -6,6 +6,7 @@ import {
   isValidSuperAppName,
   superAppStoragePath,
 } from "@/lib/superapp";
+import { isValidVersion } from "@/lib/superapp-versions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +20,11 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
 /**
  * Publishes a file at /superapp/<name>.
  *
- * Request: multipart/form-data with a `file` field and an optional `name`
- * field (defaults to the uploaded file name). Uploading an existing name
- * replaces that file.
+ * Request: multipart/form-data with a `file` field, an optional `name`
+ * field (defaults to the uploaded file name) and an optional `version`
+ * (`x.y.z`). With a version the file is stored as that version's snapshot and
+ * served at /superapp/<name>?v=<version>; without one it is the unversioned
+ * copy. Uploading an existing name (and version) replaces that file.
  * Auth: `Authorization: Bearer <SUPERAPP_API_KEY>` or `X-API-Key: <key>`.
  */
 export async function POST(request: Request) {
@@ -56,9 +59,21 @@ export async function POST(request: Request) {
     );
   }
 
+  const versionField = form.get("version");
+  const version =
+    typeof versionField === "string" && versionField.trim()
+      ? versionField.trim()
+      : null;
+  if (version !== null && !isValidVersion(version)) {
+    return jsonResponse(
+      { error: "Invalid version: expected major.minor.patch, e.g. 0.2.0" },
+      400
+    );
+  }
+
   try {
     const supabase = createAdminClient();
-    const storagePath = superAppStoragePath(name);
+    const storagePath = superAppStoragePath(name, version);
     const mimeType = file.type || DEFAULT_MIME_TYPE;
 
     const { error: uploadError } = await supabase.storage
@@ -69,24 +84,26 @@ export async function POST(request: Request) {
       return jsonResponse({ error: "Failed to store file" }, 500);
     }
 
-    const { error: dbError } = await supabase.from("superapp_files").upsert({
-      name,
-      storage_path: storagePath,
-      mime_type: mimeType,
-      size: file.size,
-      updated_at: new Date().toISOString(),
-    });
+    const { error: dbError } = await supabase.from("superapp_files").upsert(
+      {
+        name,
+        version,
+        storage_path: storagePath,
+        mime_type: mimeType,
+        size: file.size,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "name,version" }
+    );
     if (dbError) {
       console.error("SuperApp metadata save failed", dbError);
       return jsonResponse({ error: "Failed to register file" }, 500);
     }
 
-    const url = new URL(
-      `/superapp/${encodeURIComponent(name)}`,
-      request.url
-    ).toString();
+    const url = new URL(`/superapp/${encodeURIComponent(name)}`, request.url);
+    if (version) url.searchParams.set("v", version);
     return jsonResponse(
-      { name, size: file.size, mimeType, url },
+      { name, size: file.size, mimeType, url: url.toString(), version },
       201
     );
   } catch (error) {
