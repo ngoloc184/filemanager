@@ -2,7 +2,7 @@
 // question (Vietnamese or English) into one of a fixed set of intents with
 // validated parameters. Only these intents can ever reach the database.
 
-import { STOP_PHRASES, normalize, removePhrases, tokenize } from "./text.ts";
+import { STOP_PHRASES, normalize, originalSlice, removePhrases, tokenize } from "./text.ts";
 
 export type Scope = "all" | "mine" | "shared";
 export type DateField = "updated" | "created";
@@ -35,6 +35,14 @@ export type Intent =
   | { kind: "my_shares"; grantee: string | null }
   | { kind: "summarize"; terms: string[]; useContext: boolean }
   | { kind: "similar"; terms: string[]; useContext: boolean }
+  | { kind: "ask"; question: string; terms: string[] }
+  | { kind: "compare"; terms: string[]; topic: string[] }
+  | { kind: "export"; format: "xlsx" | "csv" | "md" | "txt" | null }
+  | { kind: "create_folder"; name: string }
+  | { kind: "rename"; name: string; terms: string[] }
+  | { kind: "move"; folder: string | null; terms: string[] }
+  | { kind: "share"; email: string; role: "viewer" | "editor"; terms: string[] }
+  | { kind: "refuse"; reason: "delete" | "public" | "bulk" }
   | { kind: "out_of_scope" }
   | { kind: "clarify" };
 
@@ -190,6 +198,98 @@ function extractTerms(text: string): string[] {
   return terms.slice(0, 10);
 }
 
+const FIND_WORDS =
+  /\b(tim|tim kiem|liet ke|list|search|find|hien thi|file nao|tep nao|tai lieu nao|nhung file|cac file|co file|co tai lieu|file gi|nhung tai lieu|cac tai lieu)\b/;
+const QUESTION_WORDS =
+  /\b(la gi|bao nhieu|bao lau|bao gio|khi nao|luc nao|ngay nao|the nao|nhu the nao|ra sao|o dau|tai sao|vi sao|la ai|ai la|co phai|hay khong|dieu khoan nao|muc nao|phan nao|noi dung nao|can lam gi|phai lam gi|lam gi|gom nhung gi|bao gom nhung|quy dinh gi|what|how|when|who|why|which)\b/;
+const COMPARE_WORDS =
+  /\b(so sanh|doi chieu|compare|khac nhau|diem khac|giong va khac|khac biet|giong nhau o)\b/;
+const REF_WORDS = [
+  "file nay", "file do", "file kia", "tai lieu nay", "tai lieu do", "hop dong nay", "hop dong do", "bao cao nay", "bao cao do",
+  "hai file", "ca hai", "cac file tren", "hai hop dong", "hai bao cao", "hai tai lieu", "file thu nhat", "file thu hai", "file thu ba",
+];
+
+/** Name typed by the user after a marker, original casing/accents kept. */
+function tail(raw: string, n: string, marker: RegExp): string | null {
+  const m = n.match(marker);
+  if (!m || m.index === undefined) return null;
+  const value = originalSlice(raw, m.index + m[0].length).replace(/^[\s:"“'‘]+|[\s"”'’.!?]+$/g, "").trim();
+  return value || null;
+}
+
+/** Write actions, refusals, comparisons, exports and content questions. */
+function parseCommand(raw: string, n: string): Intent | null {
+  const isMemoryTalk = /\b(bo nho|ghi nho|lich su|history|memory|cuoc tro chuyen)\b/.test(n);
+
+  // Never through the assistant: deleting, making public, bulk permission changes.
+  if (/\b(xoa|delete|remove|huy|don sach|empty)\b/.test(n) && !isMemoryTalk && /\b(file|tep|tai lieu|thu muc|folder|thung rac|trash|het|tat ca|no|nay|do)\b/.test(n)) {
+    return { kind: "refuse", reason: "delete" };
+  }
+  const shareVerb = /\b(chia se|share|cap quyen|phan quyen|mo quyen)\b/.test(n);
+  if ((shareVerb || /\b(dat|chuyen|lam|de)\b/.test(n)) && /\b(cong khai|public|cho moi nguoi|ai cung xem|bat ky ai)\b/.test(n)) {
+    return { kind: "refuse", reason: "public" };
+  }
+  if (shareVerb && /\b(tat ca|toan bo|hang loat|all|moi) (cac |nhung )?(file|tai lieu|thu muc|documents?)\b/.test(n)) {
+    return { kind: "refuse", reason: "bulk" };
+  }
+
+  const folder = n.match(/^(?:hay |giup toi |giup minh |vui long |ban )?(?:tao|create|lam|them|make)\s+(?:mot |1 |a )?(?:thu muc|folder)(?: moi| new)?(?:\s+(?:ten la|co ten|ten|named|called|la))?\s+/);
+  if (folder) {
+    const name = tail(raw, n, new RegExp(folder[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    if (name) return { kind: "create_folder", name };
+  }
+
+  if (/\b(doi ten|rename)\b/.test(n)) {
+    const marker = n.match(/^(.*)\b(thanh|sang|to|la)\s+/);
+    const name = marker ? tail(raw, n, new RegExp(`^${marker[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`)) : null;
+    const target = marker ? marker[1] : n;
+    if (name) return { kind: "rename", name, terms: extractTerms(removePhrases(target, ["doi ten", "rename", ...REF_WORDS])) };
+  }
+
+  const move = n.match(/\b(di chuyen|chuyen|move)\b(.*?)\b(vao|sang|toi|den|into|to)\s+(?:trong\s+)?(?:thu muc|folder)?\s*/);
+  if (move && !/\b(chuyen doi|convert)\b/.test(n)) {
+    const dest = tail(raw, n, new RegExp(move[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    const root = !dest || /^(goc|root|thu muc goc|my files)$/.test(normalize(dest));
+    return { kind: "move", folder: root ? null : dest, terms: extractTerms(removePhrases(move[2], REF_WORDS)) };
+  }
+
+  const email = raw.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,24}/);
+  if (shareVerb && email && !/\b(da chia se|da share|nhung gi|nhung file nao|file nao)\b/.test(n)) {
+    const role = /\b(chinh sua|sua|editor|edit|bien tap|quyen ghi)\b/.test(n) ? "editor" : "viewer";
+    const target = n.split(/\b(voi|cho|with|to)\b/)[0];
+    return { kind: "share", email: email[0].toLowerCase(), role, terms: extractTerms(removePhrases(target, ["chia se", "share", "cap quyen", "quyen xem", ...REF_WORDS])) };
+  }
+
+  if (/\b(xuat|export|tai xuong|download|luu (ra|thanh|vao)|tao file)\b/.test(n) && /\b(excel|xlsx|csv|markdown|md|txt|file|bang|ket qua|danh sach)\b/.test(n)) {
+    const format = /\b(excel|xlsx|bang tinh)\b/.test(n)
+      ? "xlsx"
+      : /\bcsv\b/.test(n)
+        ? "csv"
+        : /\b(markdown|md)\b/.test(n)
+          ? "md"
+          : /\b(txt|van ban thuan|text)\b/.test(n)
+            ? "txt"
+            : null;
+    return { kind: "export", format };
+  }
+
+  if (COMPARE_WORDS.test(n)) {
+    const rest = removePhrases(n, ["so sanh", "doi chieu", "compare", "khac nhau", "diem khac", "giong va khac", "khac biet", "giong nhau o", "nhu the nao", "the nao", "giua", "voi", "va", ...REF_WORDS]);
+    const terms = extractTerms(rest);
+    const topic = n.match(/\b(?:ve|o|phan|muc|dieu khoan)\s+(.+?)(?:\s+(?:giua|cua|trong)\b|$)/);
+    return { kind: "compare", terms, topic: topic ? extractTerms(topic[1]) : [] };
+  }
+  return null;
+}
+
+/** A question about the content of documents rather than a file search. */
+function isContentQuestion(question: string, n: string): boolean {
+  if (FIND_WORDS.test(n)) return false;
+  const terms = extractTerms(n);
+  if (QUESTION_WORDS.test(n)) return terms.length >= 1;
+  return /\?\s*$/.test(question) && terms.length >= 3;
+}
+
 export type ParseOptions = { now?: Date; utcOffsetMinutes?: number };
 
 /** Parses a user question into a supported intent. Never throws. */
@@ -205,6 +305,9 @@ export function parseQuestion(raw: string, options: ParseOptions = {}): Intent {
   if (/\b(help|tro giup|huong dan|ban (co the )?lam (duoc )?gi|ban giup (duoc )?gi|what can you do|how do i use)\b/.test(n)) {
     return { kind: "help" };
   }
+
+  const command = parseCommand(question, n);
+  if (command) return command;
 
   // "what did I share with X?"
   const shareWith =
@@ -236,6 +339,10 @@ export function parseQuestion(raw: string, options: ParseOptions = {}): Intent {
 
   if (/\b(thong ke|bao nhieu (file|tep|tai lieu)|tong so|tong dung luong|dung luong|statistics?|stats|how many|storage used)\b/.test(n)) {
     return { kind: "stats" };
+  }
+
+  if (isContentQuestion(question, n)) {
+    return { kind: "ask", question, terms: extractTerms(n) };
   }
 
   // ---- find ---------------------------------------------------------------

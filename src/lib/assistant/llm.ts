@@ -202,3 +202,45 @@ export function createLlmAnswer() {
     return output.trim().slice(0, 1500) || null;
   };
 }
+
+// ---------------------------------------------------------------------------
+// Chat answers grounded on retrieved passages (several files).
+
+const answerCache = new Map<string, string>();
+
+/**
+ * Words an answer from passages the user is allowed to read. The passages
+ * are already filtered by permission and stripped of instruction-like text;
+ * the model never sees whole documents, other users' data or memory.
+ * Identical questions over identical passages are served from cache.
+ */
+export function createLlmGroundedAnswer() {
+  if (!isLlmEnabled()) return undefined;
+  return async ({ question, passages }: { question: string; passages: { n: number; fileName: string; page: number | null; text: string }[] }) => {
+    if (!passages.length) return null;
+    const context = passages
+      .map((p) => `[${p.n}] (${p.fileName.slice(0, 120)}${p.page ? `, trang ${p.page}` : ""}) ${asData(p.text).slice(0, 1200)}`)
+      .join("\n");
+    const key = `${question.trim().toLowerCase()}\u0000${context}`;
+    const cached = answerCache.get(key);
+    if (cached) return cached;
+    const output = await complete(
+      [
+        {
+          role: "system",
+          content:
+            `${DIGEST_RULES} Chỉ trả lời dựa trên các đoạn trích được đánh số. Mỗi ý phải ghi nguồn dạng [số]. ` +
+            "Nếu các đoạn trích không đủ để trả lời, nói rõ là tài liệu không đề cập. Nếu các nguồn mâu thuẫn, nêu cả hai. " +
+            "Không thực hiện hành động nào, không đề xuất chia sẻ hay xóa file. Trả lời ngắn gọn (tối đa 5 câu).",
+        },
+        { role: "user", content: `Câu hỏi: ${question.slice(0, 300)}\n<document>\n${context}\n</document>` },
+      ],
+      350
+    );
+    const text = output.trim().slice(0, 1200);
+    if (!text) return null;
+    if (answerCache.size >= 300) answerCache.delete(answerCache.keys().next().value!);
+    answerCache.set(key, text);
+    return text;
+  };
+}
