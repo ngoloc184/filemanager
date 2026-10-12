@@ -62,10 +62,50 @@ Indexing is triggered automatically after every upload / new version, lazily
 * File content is treated as untrusted data: it is never executed, and the
   optional LLM prompt marks it as data and forbids following instructions in it.
 
+## File summaries ("AI tóm tắt")
+
+Open it from a file's `⋯` menu, from the preview or details dialog, or with
+"Tóm tắt chi tiết" on a chat summary card. The dialog shows the file name, a
+length switch (Ngắn gọn / Ý chính / Chi tiết), progress steps, then
+Tổng quan · Các ý chính · Thông tin chi tiết · Việc cần thực hiện · Kết luận,
+with page numbers for PDFs. Buttons: copy, re-summarize (re-reads the file),
+open file, plus "Hỏi về nội dung file" (answers quote the matching passages).
+
+Pipeline (`POST /api/assistant/summarize`, `src/lib/assistant/file-summary.ts`):
+
+1. The user comes from the session cookie; the body only carries `fileId`
+   (UUID), `length`, `refresh` and an optional `question` (≤ 300 chars).
+2. `assistant_get_document(file_id)` (migration 0017, `security definer`,
+   `auth.uid()`) returns the row **only if** the caller can read the file
+   (same rules as `has_file_access`). Unknown and forbidden files get the same
+   404, so nothing leaks. Revoking a share takes effect on the next request.
+3. The text comes from the existing per-version `file_contents` index. If the
+   file was updated (new version) or never indexed, it is extracted again
+   once, then reused: unchanged files are never re-read.
+4. Extraction: TXT/MD/CSV/JSON/HTML…, PDF (text layer, page by page),
+   DOCX (headings kept), XLSX/ODS (sheet name, columns, rows), PPTX/ODP.
+   A PDF without text gets "cần OCR"; images, legacy `.doc/.xls/.ppt` and
+   binaries get "chưa hỗ trợ". Nothing is invented when reading fails.
+5. Summary (`src/lib/assistant/digest.ts`), local and free: sentences are
+   copied verbatim (numbers, dates and names unchanged) and picked across up
+   to 8 parts of the document so long files are covered to the end. Tables
+   get per-column statistics computed from the data. The UI says
+   "Trích xuất tự động · không dùng AI bên ngoài".
+6. Only if an admin configured the optional model (below), documents are
+   summarized by it in chunks (map → reduce) with the content marked as
+   untrusted data. Its result is cached in memory per file **version** and
+   length, after the permission check; failures fall back to the local
+   summary.
+
+The route never edits, deletes or shares anything, sends `Cache-Control:
+no-store`, is rate limited (20/min/user) and stops after 55 s.
+
 ## Setup
 
-1. Run the migration `supabase/migrations/202608280016_assistant_search.sql`
-   in the Supabase SQL editor (after 0001–0015). It only **adds** a table,
+1. Run the migrations `supabase/migrations/202608280016_assistant_search.sql`
+   then `202608280017_assistant_get_document.sql` in the Supabase SQL editor
+   (after 0001–0015). Paste the whole file (open the GitHub "Raw" view,
+   Ctrl+A) — a truncated paste fails with "unterminated dollar-quoted string". It only **adds** a table,
    indexes and functions; existing tables, policies and access rules are not
    modified. It enables the `unaccent` extension (accent-insensitive Vietnamese
    search) if needed.
@@ -78,7 +118,7 @@ Indexing is triggered automatically after every upload / new version, lazily
 
 ### Optional language model (off by default)
 
-Only summaries can use a model, and only when all of these are set:
+Only summaries and file Q&A can use a model, and only when all of these are set:
 
 | Variable | Example |
 |---|---|
@@ -117,7 +157,9 @@ Other knobs: `ASSISTANT_MAX_INDEX_MB` (default 15) — larger files are marked
   `supabase/tests/10_assistant_permissions.sql`: 35 isolation checks with
   four users (owner, folder-share inheritance, direct share then revoke,
   public files, trash, outdated versions, index write protection, anonymous
-  calls, and parity with `has_file_access()` for every user).
+  calls, and parity with `has_file_access()` for every user), plus the
+  `assistant_get_document` checks (owner, stranger, folder share, revoke,
+  outdated version).
   Requires `psql` and PostgreSQL 15+ with `pg_trgm`, `unaccent`, `pgcrypto`:
   `PGHOST=… PGPORT=… PGUSER=postgres npm run test:db`.
 
@@ -129,5 +171,7 @@ Other knobs: `ASSISTANT_MAX_INDEX_MB` (default 15) — larger files are marked
   "similar documents" compares top keywords. No embeddings/vector DB yet.
 * Scanned PDFs/images have no text layer (no OCR). Legacy `.doc/.xls/.ppt`
   binaries are not supported.
-* Up to 200,000 characters of text are indexed per file.
+* Up to 200,000 characters of text are indexed per file; summaries of longer
+  files say they only cover the first part.
+* Local summaries are extractive (selected sentences), not rewritten prose.
 * The per-instance rate limiter is best-effort on serverless platforms.

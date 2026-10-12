@@ -4,7 +4,8 @@
 
 import { mentionsFiles, parseQuestion, type Filters, type Intent } from "./intent.ts";
 import { isIndexable, INDEXABLE_EXTENSIONS } from "./formats.ts";
-import { summarize, topKeywords } from "./summarize.ts";
+import { topKeywords } from "./summarize.ts";
+import { buildDigest } from "./digest.ts";
 import type {
   AssistantFile,
   AssistantReply,
@@ -329,7 +330,11 @@ async function summarizeFile(intent: Extract<Intent, { kind: "summarize" }>, con
       points = null;
     }
   }
-  const local = summarize(row.content);
+  const digest = buildDigest(row.content, row.extension, "keypoints");
+  const local = {
+    points: [...digest.overview.slice(0, 1), ...digest.keyPoints.map((p) => (p.page ? `${p.text} (trang ${p.page})` : p.text))],
+    keywords: digest.keywords,
+  };
   if (!points?.length) points = local.points;
   if (!points.length) {
     return reply({ intent: "summarize", text: `“${row.name}” không có đủ văn bản để tóm tắt.`, contextFileId: row.file_id });

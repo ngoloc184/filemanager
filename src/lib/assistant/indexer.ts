@@ -55,6 +55,8 @@ async function indexOne(user: SupabaseClient, candidate: Candidate): Promise<voi
         if (result.status === "indexed") {
           content = result.text;
           truncated = result.truncated;
+        } else if (result.status === "empty" && result.reason) {
+          error = result.reason;
         }
       } catch {
         error = "extract_failed";

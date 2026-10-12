@@ -24,6 +24,7 @@ import {
   Plus,
   Search,
   Share2,
+  Sparkles,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -69,6 +70,7 @@ import {
 } from "@/lib/types/database";
 import { cn, ENTER_ANIMATION, formatBytes, staggerDelay } from "@/lib/utils";
 import UploadPanel from "@/components/files/upload-panel";
+import { openAiSummary } from "@/components/files/ai-summary-dialog";
 import { FileTile, fileKind } from "@/components/files/file-tile";
 import { FILES_COMMAND_EVENT, type FilesCommand } from "@/components/navigation";
 import ShareDialog from "@/components/files/share-dialog";
@@ -566,6 +568,12 @@ export default function FilesClient({
           <DropdownMenuItem onClick={() => void handleDownload(file)}>
             <Download className="h-4 w-4 mr-2" />
             Download
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => openAiSummary({ id: file.id, name: file.name, mimeType: file.mime_type })}
+          >
+            <Sparkles className="h-4 w-4 mr-2 text-primary" />
+            AI tóm tắt
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setDetailsFile(file)}>
             <Info className="h-4 w-4 mr-2" />

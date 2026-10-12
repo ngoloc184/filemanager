@@ -50,14 +50,17 @@ describe("extractText", () => {
     assert.ok(r.status === "indexed" && /API authentication\s*\n\s*dùng JWT/.test(r.text), JSON.stringify(r));
   });
 
-  it("xlsx shared strings and sheet names", async () => {
+  it("xlsx keeps sheets, rows and columns", async () => {
     const bytes = zip({
       "xl/workbook.xml": '<workbook><sheets><sheet name="Doanh thu" sheetId="1"/></sheets></workbook>',
-      "xl/sharedStrings.xml": "<sst><si><t>Quý 3</t></si><si><t>Tổng</t></si></sst>",
-      "xl/worksheets/sheet1.xml": "<worksheet><sheetData/></worksheet>",
+      "xl/sharedStrings.xml": "<sst><si><t>Quý</t></si><si><t>Tổng</t></si><si><t>Quý 3</t></si></sst>",
+      "xl/worksheets/sheet1.xml":
+        '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>' +
+        '<row r="2"><c r="A2" t="s"><v>2</v></c><c r="C2"><v>1500</v></c></row></sheetData></worksheet>',
     });
     const r = await extractText("xlsx", bytes);
-    assert.ok(r.status === "indexed" && r.text.includes("Doanh thu") && r.text.includes("Quý 3"));
+    assert.ok(r.status === "indexed", JSON.stringify(r));
+    assert.equal(r.status === "indexed" && r.text, "### Sheet: Doanh thu\nQuý\tTổng\nQuý 3\t\t1500");
   });
 
   it("pptx slides in order", async () => {

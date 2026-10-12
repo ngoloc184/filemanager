@@ -14,6 +14,7 @@ import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { CommandPalette, openCommandPalette } from "@/components/command-palette";
 import { AssistantWidget, clearAssistantHistory } from "@/components/assistant/assistant-widget";
+import { AiSummaryHost } from "@/components/files/ai-summary-dialog";
 import { NAV_ITEMS, isActive, type NavItem } from "@/components/navigation";
 import { cn } from "@/lib/utils";
 
@@ -186,6 +187,7 @@ export default function DashboardLayout({
       <AuroraBackground variant="subtle" />
       <CommandPalette onSignOut={handleLogout} />
       <AssistantWidget userId={user.id} />
+      <AiSummaryHost />
 
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-[17rem] shrink-0 border-r bg-sidebar/60 backdrop-blur-2xl lg:block">

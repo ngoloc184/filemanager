@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { FileTile, fileKind } from "@/components/files/file-tile";
+import { onAiSummaryVisibility, openAiSummary } from "@/components/files/ai-summary-dialog";
 import { cn, formatBytes } from "@/lib/utils";
 import type { AssistantFile, AssistantReply } from "@/lib/assistant/types";
 
@@ -186,13 +187,23 @@ function ReplyView({
               ))}
             </div>
           )}
-          <Link
-            href={reply.summary.openUrl}
-            className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-          >
-            <ExternalLink className="h-3 w-3" />
-            Nguồn: {reply.summary.fileName}
-          </Link>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Link
+              href={reply.summary.openUrl}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Nguồn: {reply.summary.fileName}
+            </Link>
+            <button
+              type="button"
+              onClick={() => openAiSummary({ id: reply.summary!.fileId, name: reply.summary!.fileName })}
+              className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <Sparkles className="h-3 w-3" />
+              Tóm tắt chi tiết
+            </button>
+          </div>
         </div>
       )}
 
@@ -302,9 +313,31 @@ export function AssistantWidget({ userId }: { userId: string }) {
   const [pending, setPending] = useState(false);
   const [indexing, setIndexing] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const reopenRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Step aside while the "AI tóm tắt" dialog is open so nothing covers its
+  // footer (on mobile the launcher sits on top of the copy button), then
+  // come back the way the user left it.
+  const openRef = useRef(open);
+  openRef.current = open;
+  useEffect(
+    () =>
+      onAiSummaryVisibility((visible) => {
+        setSummaryOpen(visible);
+        if (visible) {
+          reopenRef.current = reopenRef.current || openRef.current;
+          setOpen(false);
+        } else if (reopenRef.current) {
+          reopenRef.current = false;
+          setOpen(true);
+        }
+      }),
+    []
+  );
 
   // Restore this account's conversation (never another account's).
   useEffect(() => {
@@ -477,7 +510,7 @@ export function AssistantWidget({ userId }: { userId: string }) {
     <>
       {/* Launcher */}
       <AnimatePresence>
-        {!open && (
+        {!open && !summaryOpen && (
           <motion.button
             type="button"
             onClick={() => setOpen(true)}
