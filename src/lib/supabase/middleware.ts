@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Routes that are reachable without being signed in.
+const PUBLIC_PATHS = ["/"]; // landing page (exact match)
 const PUBLIC_PREFIXES = ["/login", "/register", "/api/auth", "/setup"];
 
 export async function updateSession(request: NextRequest) {
@@ -37,7 +38,10 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  if (!user && !PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+  const isPublic =
+    PUBLIC_PATHS.includes(pathname) ||
+    PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

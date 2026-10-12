@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { PreviewDialog } from "@/components/files/file-dialogs";
 import { downloadFile, listRecentFiles } from "@/lib/services/files";
 import { getErrorMessage, type FileRow } from "@/lib/types/database";
-import { formatBytes } from "@/lib/utils";
+import { cn, ENTER_ANIMATION, formatBytes, staggerDelay } from "@/lib/utils";
 
 function RecentFileIcon({ file }: { file: FileRow }) {
   const className = "h-5 w-5 text-muted-foreground shrink-0";
@@ -99,7 +99,7 @@ export default function RecentClient({
           </Button>
         </div>
       ) : files && files.length === 0 ? (
-        <div className="rounded-xl border bg-white flex flex-col items-center justify-center py-16 px-4">
+        <div className="rounded-2xl border border-dashed bg-card/70 backdrop-blur flex flex-col items-center justify-center py-16 px-4">
           <Clock className="h-16 w-16 text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-semibold">No recent files</h3>
           <p className="text-muted-foreground mt-1 text-center">
@@ -107,11 +107,12 @@ export default function RecentClient({
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border bg-white divide-y">
-          {(files ?? []).map((file) => (
+        <div className="rounded-2xl border bg-card/80 backdrop-blur shadow-sm divide-y overflow-hidden">
+          {(files ?? []).map((file, index) => (
             <div
               key={file.id}
-              className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50"
+              className={cn("flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50", ENTER_ANIMATION)}
+              style={staggerDelay(index)}
               onClick={() => setPreviewFile(file)}
             >
               <RecentFileIcon file={file} />

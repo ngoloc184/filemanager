@@ -42,8 +42,8 @@ export default function StorageUsage() {
     percent >= 95
       ? "bg-destructive"
       : percent >= 80
-        ? "bg-amber-500"
-        : "bg-primary";
+        ? "bg-warning"
+        : "bg-brand";
 
   return (
     <div className="px-3 py-2" aria-label="Storage usage">

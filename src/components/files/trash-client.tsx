@@ -28,7 +28,7 @@ import {
   type TrashItem,
 } from "@/lib/services/trash";
 import { getErrorMessage } from "@/lib/types/database";
-import { formatBytes } from "@/lib/utils";
+import { cn, ENTER_ANIMATION, formatBytes, staggerDelay } from "@/lib/utils";
 
 export default function TrashClient() {
   const [items, setItems] = useState<TrashItem[] | null>(null);
@@ -130,7 +130,7 @@ export default function TrashClient() {
           </Button>
         </div>
       ) : items && items.length === 0 ? (
-        <div className="rounded-xl border bg-white flex flex-col items-center justify-center py-16 px-4">
+        <div className="rounded-2xl border border-dashed bg-card/70 backdrop-blur flex flex-col items-center justify-center py-16 px-4">
           <Trash2 className="h-16 w-16 text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-semibold">Trash is empty</h3>
           <p className="text-muted-foreground mt-1 text-center">
@@ -138,9 +138,13 @@ export default function TrashClient() {
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border bg-white divide-y">
-          {items?.map((item) => (
-            <div key={`${item.item_type}-${item.id}`} className="flex items-center gap-3 px-4 py-3">
+        <div className="rounded-2xl border bg-card/80 backdrop-blur shadow-sm divide-y overflow-hidden">
+          {items?.map((item, index) => (
+            <div
+              key={`${item.item_type}-${item.id}`}
+              className={cn("flex items-center gap-3 px-4 py-3", ENTER_ANIMATION)}
+              style={staggerDelay(index)}
+            >
               {item.item_type === "folder" ? (
                 <FolderIcon className="h-5 w-5 text-primary shrink-0" />
               ) : (

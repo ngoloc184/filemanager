@@ -1,26 +1,29 @@
 "use client";
 
 import { ReactNode, useState } from "react";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
+import { AnimatePresence, motion } from "motion/react";
 import { toast } from "react-hot-toast";
 import {
-  LogOut,
-  Upload,
-  Menu,
-  X,
-  FolderOpen,
-  UsersRound,
-  Search,
-  Trash2,
-  Share2,
   Clock,
   History,
+  LogOut,
+  Menu,
+  Search,
+  Share2,
+  Trash2,
+  Upload,
+  UsersRound,
+  X,
   type LucideIcon,
 } from "lucide-react";
-import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
 import StorageUsage from "@/components/files/storage-usage";
+import { AuroraBackground } from "@/components/brand/aurora-background";
+import { Logo } from "@/components/brand/logo";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
@@ -47,6 +50,95 @@ function isActive(pathname: string, href: string): boolean {
   return href === "/dashboard" ? pathname === href : pathname.startsWith(href);
 }
 
+function SidebarContent({
+  pathname,
+  email,
+  onNavigate,
+  onLogout,
+  onClose,
+}: {
+  pathname: string;
+  email?: string;
+  onNavigate: () => void;
+  onLogout: () => void;
+  onClose?: () => void;
+}) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex h-16 items-center justify-between px-5">
+        <Logo href="/dashboard" />
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close menu"
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
+      </div>
+
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
+        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          const active = isActive(pathname, href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-current={active ? "page" : undefined}
+              onClick={onNavigate}
+              className={cn(
+                "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                active
+                  ? "font-medium text-primary"
+                  : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              )}
+            >
+              {active && (
+                <motion.span
+                  layoutId="sidebar-active"
+                  className="absolute inset-0 rounded-xl bg-primary/10 ring-1 ring-primary/15"
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                />
+              )}
+              <Icon
+                className={cn(
+                  "relative h-4 w-4 transition-transform group-hover:scale-110",
+                  active && "text-primary"
+                )}
+              />
+              <span className="relative">{label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="space-y-2 border-t p-3">
+        <StorageUsage />
+        <div className="flex items-center gap-3 rounded-xl px-3 py-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white shadow-md shadow-primary/20">
+            {email?.charAt(0).toUpperCase() || "U"}
+          </div>
+          <p className="min-w-0 flex-1 truncate text-sm font-medium">{email}</p>
+        </div>
+        <div className="flex items-center justify-between gap-2 px-1">
+          <ThemeToggle layoutId="sidebar-theme-pill" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2 text-muted-foreground"
+            onClick={onLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardLayout({
   children,
   user,
@@ -57,104 +149,86 @@ export default function DashboardLayout({
 
   const handleLogout = async () => {
     await createClient().auth.signOut();
-    toast.success("Logged out");
+    toast.success("Signed out");
     router.push("/login");
     router.refresh();
   };
 
+  const current = NAV_ITEMS.find((item) => isActive(pathname, item.href));
+
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
+    <div className="relative flex min-h-screen">
+      <AuroraBackground variant="subtle" />
+
+      {/* Desktop sidebar */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-r bg-sidebar/70 backdrop-blur-xl lg:block">
+        <SidebarContent
+          pathname={pathname}
+          email={user.email}
+          onNavigate={() => {}}
+          onLogout={handleLogout}
         />
-      )}
-
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200",
-          "transform transition-transform duration-200 ease-in-out",
-          "lg:translate-x-0 lg:static lg:z-auto",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <FolderOpen className="h-4 w-4 text-primary-foreground" />
-              </div>
-              <span className="font-bold text-lg">File Manager</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(false)}
-              aria-label="Close menu"
-              className="lg:hidden text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          <nav className="flex-1 px-4 py-4 space-y-1">
-            {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg",
-                  isActive(pathname, href)
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-                aria-current={isActive(pathname, href) ? "page" : undefined}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="p-4 border-t border-gray-200">
-            <div className="mb-2">
-              <StorageUsage />
-            </div>
-            <div className="flex items-center gap-3 px-3 py-2">
-              <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm font-medium text-gray-600">
-                {user.email?.charAt(0).toUpperCase() || "U"}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user.email}</p>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-3 mt-1 text-muted-foreground"
-              onClick={handleLogout}
-            >
-              <LogOut className="h-4 w-4" />
-              Sign Out
-            </Button>
-          </div>
-        </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center px-4 lg:px-6 shrink-0">
+      {/* Mobile drawer */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            <motion.div
+              key="overlay"
+              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+            />
+            <motion.aside
+              key="drawer"
+              className="fixed inset-y-0 left-0 z-50 w-72 border-r bg-sidebar shadow-2xl lg:hidden"
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", stiffness: 380, damping: 38 }}
+            >
+              <SidebarContent
+                pathname={pathname}
+                email={user.email}
+                onNavigate={() => setSidebarOpen(false)}
+                onLogout={handleLogout}
+                onClose={() => setSidebarOpen(false)}
+              />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b bg-background/60 px-4 backdrop-blur-xl lg:px-8">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
             aria-label="Open menu"
-            className="lg:hidden text-muted-foreground hover:text-foreground mr-3"
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="text-lg font-semibold">File Manager</h1>
+          <h1 className="text-base font-semibold tracking-tight">
+            {current?.label ?? "File Manager"}
+          </h1>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden gap-2 text-muted-foreground sm:inline-flex"
+              render={<Link href="/search" />}
+            >
+              <Search className="h-3.5 w-3.5" />
+              Search files
+            </Button>
+          </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 lg:p-6">{children}</main>
+        <main className="flex-1 p-4 lg:p-8">{children}</main>
       </div>
     </div>
   );

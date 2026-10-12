@@ -128,7 +128,7 @@ export default function ActivityClient({
           </Button>
         </div>
       ) : events && events.length === 0 ? (
-        <div className="rounded-xl border bg-white flex flex-col items-center justify-center py-16 px-4">
+        <div className="rounded-2xl border border-dashed bg-card/70 backdrop-blur flex flex-col items-center justify-center py-16 px-4">
           <History className="h-16 w-16 text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-semibold">No activity yet</h3>
           <p className="text-muted-foreground mt-1 text-center">
@@ -136,7 +136,7 @@ export default function ActivityClient({
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border bg-white divide-y">
+        <div className="rounded-2xl border bg-card/80 backdrop-blur shadow-sm divide-y overflow-hidden">
           {(events ?? []).map((event) => {
             const actor =
               event.actor_id === user.id

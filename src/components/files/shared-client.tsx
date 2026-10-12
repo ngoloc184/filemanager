@@ -13,7 +13,7 @@ import {
 } from "@/lib/services/sharing";
 import { downloadFile } from "@/lib/services/files";
 import { getErrorMessage } from "@/lib/types/database";
-import { formatBytes } from "@/lib/utils";
+import { cn, ENTER_ANIMATION, formatBytes, staggerDelay } from "@/lib/utils";
 import { PreviewDialog } from "@/components/files/file-dialogs";
 
 const roleBadge: Record<string, "default" | "secondary" | "outline"> = {
@@ -87,7 +87,7 @@ export default function SharedClient() {
           </Button>
         </div>
       ) : items && items.length === 0 ? (
-        <div className="rounded-xl border bg-white flex flex-col items-center justify-center py-16 px-4">
+        <div className="rounded-2xl border border-dashed bg-card/70 backdrop-blur flex flex-col items-center justify-center py-16 px-4">
           <FolderIcon className="h-16 w-16 text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-semibold">Nothing shared with you yet</h3>
           <p className="text-muted-foreground mt-1 text-center">
@@ -95,11 +95,12 @@ export default function SharedClient() {
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border bg-white divide-y">
-          {items?.map((item) => (
+        <div className="rounded-2xl border bg-card/80 backdrop-blur shadow-sm divide-y overflow-hidden">
+          {items?.map((item, index) => (
             <div
               key={`${item.item_type}-${item.id}`}
-              className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50"
+              className={cn("flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50", ENTER_ANIMATION)}
+              style={staggerDelay(index)}
               onClick={() => openItem(item)}
             >
               {item.item_type === "folder" ? (

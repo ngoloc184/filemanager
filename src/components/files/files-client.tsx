@@ -72,7 +72,7 @@ import {
   type Folder,
   type FolderAncestor,
 } from "@/lib/types/database";
-import { cn, formatBytes } from "@/lib/utils";
+import { cn, ENTER_ANIMATION, formatBytes, staggerDelay } from "@/lib/utils";
 import UploadPanel from "@/components/files/upload-panel";
 import ShareDialog from "@/components/files/share-dialog";
 import {
@@ -638,8 +638,8 @@ export default function FilesClient({
       />
 
       {isDragActive && (
-        <div className="fixed inset-0 bg-primary/10 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl shadow-2xl p-12 text-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/10 backdrop-blur-sm">
+          <div className="rounded-3xl border bg-card/90 p-12 text-center shadow-2xl backdrop-blur-xl">
             <Upload className="h-16 w-16 text-primary mx-auto mb-4 animate-bounce" />
             <p className="text-xl font-semibold text-primary">
               Drop files here to upload
@@ -690,7 +690,7 @@ export default function FilesClient({
               className="pl-10"
             />
           </div>
-          <div className="flex gap-2 w-full sm:w-auto">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <div className="flex rounded-lg border overflow-hidden">
               <button
                 onClick={() => changeView("list")}
@@ -716,21 +716,33 @@ export default function FilesClient({
             <Button
               variant={selectionMode ? "secondary" : "outline"}
               onClick={toggleSelectionMode}
-              className="flex-1 sm:flex-none"
+              aria-label={selectionMode ? "Cancel selection" : "Select items"}
             >
-              <CheckSquare className="h-4 w-4 mr-2" />
-              {selectionMode ? "Cancel" : "Select"}
+              <CheckSquare className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">{selectionMode ? "Cancel" : "Select"}</span>
             </Button>
-            <Button variant="outline" onClick={() => setNewFolderOpen(true)} className="flex-1 sm:flex-none">
-              <FolderPlus className="h-4 w-4 mr-2" />
-              New Folder
+            <Button
+              variant="outline"
+              onClick={() => setNewFolderOpen(true)}
+              aria-label="New folder"
+            >
+              <FolderPlus className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">New Folder</span>
             </Button>
-            <Button variant="outline" onClick={open} className="flex-1 sm:flex-none">
-              <Upload className="h-4 w-4 mr-2" />
+            <Button
+              variant="outline"
+              onClick={open}
+              className="hidden md:inline-flex"
+            >
+              <Upload className="h-4 w-4 mr-1" />
               Drag & Drop
             </Button>
-            <Button onClick={() => fileInputRef.current?.click()} className="flex-1 sm:flex-none">
-              <Plus className="h-4 w-4 mr-2" />
+            <Button
+              variant="brand"
+              onClick={() => fileInputRef.current?.click()}
+              className="ml-auto sm:ml-0"
+            >
+              <Plus className="h-4 w-4 mr-1" />
               Upload
             </Button>
           </div>
@@ -789,7 +801,7 @@ export default function FilesClient({
             </Button>
           </div>
         ) : isEmpty ? (
-          <div className="rounded-xl border bg-white flex flex-col items-center justify-center py-16 px-4">
+          <div className="rounded-2xl border border-dashed bg-card/70 backdrop-blur flex flex-col items-center justify-center py-16 px-4">
             <FolderOpen className="h-16 w-16 text-muted-foreground/50 mb-4" />
             <h3 className="text-lg font-semibold">
               {query ? "No matches" : "This folder is empty"}
@@ -813,14 +825,16 @@ export default function FilesClient({
             )}
           </div>
         ) : view === "list" ? (
-          <div className="rounded-xl border bg-white divide-y">
-            {visibleFolders.map((folder) => (
+          <div className="rounded-2xl border bg-card/80 backdrop-blur shadow-sm divide-y overflow-hidden">
+            {visibleFolders.map((folder, index) => (
               <div
                 key={folder.id}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50",
+                  "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50",
+                  ENTER_ANIMATION,
                   selectionMode && selectedFolders.has(folder.id) && "bg-primary/5"
                 )}
+                style={staggerDelay(index)}
                 onClick={() =>
                   selectionMode
                     ? toggleFolderSelection(folder.id)
@@ -853,13 +867,15 @@ export default function FilesClient({
                 {!selectionMode && folderMenu(folder)}
               </div>
             ))}
-            {visibleFiles.map((file) => (
+            {visibleFiles.map((file, fileIndex) => (
               <div
                 key={file.id}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50",
+                  "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50",
+                  ENTER_ANIMATION,
                   selectionMode && selectedFiles.has(file.id) && "bg-primary/5"
                 )}
+                style={staggerDelay(visibleFolders.length + fileIndex)}
                 onClick={() =>
                   selectionMode ? toggleFileSelection(file.id) : setPreviewFile(file)
                 }
@@ -898,13 +914,15 @@ export default function FilesClient({
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {visibleFolders.map((folder) => (
+            {visibleFolders.map((folder, index) => (
               <div
                 key={folder.id}
                 className={cn(
-                  "relative rounded-xl border bg-white p-4 cursor-pointer hover:bg-muted/50 flex flex-col items-center text-center gap-2",
+                  "relative rounded-2xl border bg-card/80 backdrop-blur p-4 cursor-pointer flex flex-col items-center text-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5",
+                  ENTER_ANIMATION,
                   selectionMode && selectedFolders.has(folder.id) && "ring-2 ring-primary"
                 )}
+                style={staggerDelay(index)}
                 onClick={() =>
                   selectionMode
                     ? toggleFolderSelection(folder.id)
@@ -927,13 +945,15 @@ export default function FilesClient({
                 {!selectionMode && folderMenu(folder)}
               </div>
             ))}
-            {visibleFiles.map((file) => (
+            {visibleFiles.map((file, fileIndex) => (
               <div
                 key={file.id}
                 className={cn(
-                  "relative rounded-xl border bg-white p-4 cursor-pointer hover:bg-muted/50 flex flex-col items-center text-center gap-2",
+                  "relative rounded-2xl border bg-card/80 backdrop-blur p-4 cursor-pointer flex flex-col items-center text-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5",
+                  ENTER_ANIMATION,
                   selectionMode && selectedFiles.has(file.id) && "ring-2 ring-primary"
                 )}
+                style={staggerDelay(visibleFolders.length + fileIndex)}
                 onClick={() =>
                   selectionMode ? toggleFileSelection(file.id) : setPreviewFile(file)
                 }

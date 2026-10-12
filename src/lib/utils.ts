@@ -17,3 +17,12 @@ export function formatBytes(bytes: number): string {
   );
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
+
+/** Entrance animation for list rows/cards (tw-animate-css, CSS only). */
+export const ENTER_ANIMATION =
+  "animate-in fade-in-0 slide-in-from-bottom-1 duration-300 fill-mode-both";
+
+/** Staggers entrance animations; capped so long lists still appear quickly. */
+export function staggerDelay(index: number, stepMs = 25, maxSteps = 12) {
+  return { animationDelay: `${Math.min(index, maxSteps) * stepMs}ms` };
+}
