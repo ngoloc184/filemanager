@@ -12,6 +12,8 @@ export const maxDuration = 30;
 
 const NO_STORE = { "Cache-Control": "no-store" };
 const ANSWER_TIMEOUT_MS = 25_000;
+/** PostgREST / Postgres codes for "function or table does not exist". */
+const MISSING_SCHEMA_CODES = new Set(["PGRST202", "PGRST205", "42883", "42P01"]);
 const allow = createRateLimiter(30, 60_000);
 
 function json(body: unknown, status = 200) {
@@ -69,6 +71,19 @@ export async function POST(request: Request) {
     ]);
     return json(result);
   } catch (error) {
+    const code = (error as { code?: string })?.code;
+    // Function or table missing: migration 202608280016 has not been applied.
+    if (code && MISSING_SCHEMA_CODES.has(code)) {
+      console.error("assistant chat failed", code);
+      return json(
+        {
+          error:
+            "Trợ lý chưa được cài đặt xong trên máy chủ: cần chạy migration supabase/migrations/202608280016_assistant_search.sql trong Supabase SQL Editor.",
+          code: "assistant_not_installed",
+        },
+        503
+      );
+    }
     const timedOut = error instanceof Error && error.message === "timeout";
     // Log the failure type only, never the question or file data.
     console.error("assistant chat failed", timedOut ? "timeout" : (error as { code?: string })?.code ?? "error");
