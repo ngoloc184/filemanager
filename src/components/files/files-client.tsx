@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDropzone } from "react-dropzone";
-import { toast } from "react-hot-toast";
+import { AnimatePresence, motion } from "motion/react";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import {
   CheckSquare,
@@ -11,12 +12,6 @@ import {
   Download,
   Eye,
   File,
-  FileArchive,
-  FileAudio,
-  FileImage,
-  FileText,
-  FileVideo,
-  Folder as FolderIcon,
   FolderOpen,
   FolderPlus,
   Grid3x3,
@@ -74,6 +69,8 @@ import {
 } from "@/lib/types/database";
 import { cn, ENTER_ANIMATION, formatBytes, staggerDelay } from "@/lib/utils";
 import UploadPanel from "@/components/files/upload-panel";
+import { FileTile, fileKind } from "@/components/files/file-tile";
+import { FILES_COMMAND_EVENT, type FilesCommand } from "@/components/navigation";
 import ShareDialog from "@/components/files/share-dialog";
 import {
   DeleteDialog,
@@ -85,29 +82,6 @@ import {
 } from "@/components/files/file-dialogs";
 
 type RowTarget = { kind: "folder" | "file"; id: string; name: string };
-
-function FileTypeIcon({
-  file,
-  className,
-}: {
-  file: FileRow;
-  className?: string;
-}) {
-  if (file.mime_type.startsWith("image/"))
-    return <FileImage className={className} />;
-  if (file.mime_type.startsWith("video/"))
-    return <FileVideo className={className} />;
-  if (file.mime_type.startsWith("audio/"))
-    return <FileAudio className={className} />;
-  if (
-    file.mime_type === "application/pdf" ||
-    file.mime_type.startsWith("text/")
-  )
-    return <FileText className={className} />;
-  if (["zip", "rar", "7z", "tar", "gz"].includes(file.extension))
-    return <FileArchive className={className} />;
-  return <File className={className} />;
-}
 
 export default function FilesClient({
   user,
@@ -215,6 +189,27 @@ export default function FilesClient({
     setSelectedFolders(new Set());
     setSelectedFiles(new Set());
   }, [folderId]);
+
+  // Commands from the ⌘K palette (same page) or a ?intent= redirect.
+  useEffect(() => {
+    const onCommand = (event: Event) => {
+      const command = (event as CustomEvent<FilesCommand>).detail;
+      if (command === "upload") fileInputRef.current?.click();
+      if (command === "new-folder") setNewFolderOpen(true);
+    };
+    window.addEventListener(FILES_COMMAND_EVENT, onCommand);
+    return () => window.removeEventListener(FILES_COMMAND_EVENT, onCommand);
+  }, []);
+
+  const intent = searchParams.get("intent");
+  useEffect(() => {
+    if (!intent) return;
+    // one-shot intent from the command palette on another page
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (intent === "new-folder") setNewFolderOpen(true);
+    if (intent === "upload") toast("Drop files anywhere, or press Upload to choose files");
+    router.replace(folderId ? `/dashboard?folder=${folderId}` : "/dashboard");
+  }, [intent, folderId, router]);
 
   const navigateTo = (fid: string | null) => {
     setFilter("");
@@ -611,7 +606,7 @@ export default function FilesClient({
       {...getRootProps()}
       className={cn(
         "relative min-h-[60vh]",
-        isDragActive && "ring-2 ring-primary ring-offset-2 rounded-xl"
+        isDragActive && "rounded-3xl"
       )}
     >
       <input {...getInputProps()} />
@@ -637,21 +632,55 @@ export default function FilesClient({
         }}
       />
 
-      {isDragActive && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/10 backdrop-blur-sm">
-          <div className="rounded-3xl border bg-card/90 p-12 text-center shadow-2xl backdrop-blur-xl">
-            <Upload className="h-16 w-16 text-primary mx-auto mb-4 animate-bounce" />
-            <p className="text-xl font-semibold text-primary">
-              Drop files here to upload
-            </p>
-            <p className="text-muted-foreground mt-2">
-              Files will be uploaded to the current folder
+      <AnimatePresence>
+        {isDragActive && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 24 }}
+              className="relative w-[min(90vw,30rem)] overflow-hidden rounded-[2rem] border-2 border-dashed border-primary/50 bg-card/90 px-10 py-14 text-center shadow-2xl"
+            >
+              <div className="hero-beams opacity-60" />
+              <motion.div
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                className="relative mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-brand text-white shadow-2xl shadow-primary/40"
+              >
+                <Upload className="h-9 w-9" />
+              </motion.div>
+              <p className="relative text-2xl font-semibold tracking-tight">Drop to upload</p>
+              <p className="relative mt-2 text-muted-foreground">
+                Files will be added to{" "}
+                <span className="font-medium text-foreground">
+                  {ancestors[ancestors.length - 1]?.name ?? "My Files"}
+                </span>
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-3xl font-semibold tracking-tight">
+              {ancestors[ancestors.length - 1]?.name ?? "My Files"}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {loading
+                ? "Loading…"
+                : `${folders.length} folder${folders.length === 1 ? "" : "s"} · ${files.length} file${files.length === 1 ? "" : "s"}`}
             </p>
           </div>
         </div>
-      )}
-
-      <div className="space-y-4">
+        {folderId && (
         <nav className="flex items-center gap-1 text-sm flex-wrap" aria-label="Breadcrumb">
           <button
             onClick={() => navigateTo(null)}
@@ -679,6 +708,7 @@ export default function FilesClient({
             </span>
           ))}
         </nav>
+        )}
 
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
           <div className="relative flex-1 w-full sm:max-w-md">
@@ -801,23 +831,41 @@ export default function FilesClient({
             </Button>
           </div>
         ) : isEmpty ? (
-          <div className="rounded-2xl border border-dashed bg-card/70 backdrop-blur flex flex-col items-center justify-center py-16 px-4">
-            <FolderOpen className="h-16 w-16 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-semibold">
+          <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-3xl border border-dashed bg-card/60 px-4 py-20 backdrop-blur">
+            <div className="dot-pattern pointer-events-none absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_at_center,#000,transparent_70%)]" />
+            <div className="relative mb-6 h-24 w-32">
+              {(["pdf", "image", "archive"] as const).map((kind, i) => (
+                <motion.div
+                  key={kind}
+                  className="absolute left-1/2 top-1/2"
+                  initial={{ opacity: 0, x: "-50%", y: "-50%", rotate: 0 }}
+                  animate={{ opacity: 1, x: `${-50 + (i - 1) * 55}%`, y: ["-50%", "-62%", "-50%"], rotate: (i - 1) * 12 }}
+                  transition={{
+                    opacity: { delay: i * 0.1 },
+                    x: { type: "spring", stiffness: 160, damping: 14, delay: i * 0.1 },
+                    rotate: { type: "spring", stiffness: 160, damping: 14, delay: i * 0.1 },
+                    y: { duration: 3, repeat: Infinity, ease: "easeInOut", delay: i * 0.4 },
+                  }}
+                >
+                  <FileTile kind={kind} size="lg" className="bg-card shadow-xl" />
+                </motion.div>
+              ))}
+            </div>
+            <h3 className="relative text-lg font-semibold">
               {query ? "No matches" : "This folder is empty"}
             </h3>
-            <p className="text-muted-foreground mt-1 text-center">
+            <p className="relative mt-1 max-w-sm text-center text-muted-foreground">
               {query
                 ? "Try a different filter."
-                : "Upload files or create a folder to get started."}
+                : "Drag files anywhere on this page, or use the buttons below to get started."}
             </p>
             {!query && (
-              <div className="flex gap-2 mt-4">
+              <div className="relative mt-6 flex gap-2">
                 <Button variant="outline" onClick={() => setNewFolderOpen(true)}>
                   <FolderPlus className="h-4 w-4 mr-2" />
                   New Folder
                 </Button>
-                <Button onClick={() => fileInputRef.current?.click()}>
+                <Button variant="brand" onClick={() => fileInputRef.current?.click()}>
                   <Upload className="h-4 w-4 mr-2" />
                   Upload files
                 </Button>
@@ -830,7 +878,7 @@ export default function FilesClient({
               <div
                 key={folder.id}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50",
+                  "group/row relative flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-primary/[0.04] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-brand before:opacity-0 before:transition-opacity hover:before:opacity-100",
                   ENTER_ANIMATION,
                   selectionMode && selectedFolders.has(folder.id) && "bg-primary/5"
                 )}
@@ -851,7 +899,7 @@ export default function FilesClient({
                     aria-label={`Select ${folder.name}`}
                   />
                 )}
-                <FolderIcon className="h-5 w-5 text-primary shrink-0" />
+                <FileTile kind="folder" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{folder.name}</p>
                   <p className="text-xs text-muted-foreground">
@@ -871,7 +919,7 @@ export default function FilesClient({
               <div
                 key={file.id}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50",
+                  "group/row relative flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-primary/[0.04] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-brand before:opacity-0 before:transition-opacity hover:before:opacity-100",
                   ENTER_ANIMATION,
                   selectionMode && selectedFiles.has(file.id) && "bg-primary/5"
                 )}
@@ -890,7 +938,7 @@ export default function FilesClient({
                     aria-label={`Select ${file.name}`}
                   />
                 )}
-                <FileTypeIcon file={file} className="h-5 w-5 text-muted-foreground shrink-0" />
+                <FileTile kind={fileKind(file.mime_type, file.name)} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{file.name}</p>
                   <p className="text-xs text-muted-foreground">
@@ -918,7 +966,7 @@ export default function FilesClient({
               <div
                 key={folder.id}
                 className={cn(
-                  "relative rounded-2xl border bg-card/80 backdrop-blur p-4 cursor-pointer flex flex-col items-center text-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5",
+                  "group/card relative rounded-2xl border bg-card/80 backdrop-blur p-4 pt-5 cursor-pointer flex flex-col items-center text-center gap-2.5 transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/10",
                   ENTER_ANIMATION,
                   selectionMode && selectedFolders.has(folder.id) && "ring-2 ring-primary"
                 )}
@@ -939,7 +987,7 @@ export default function FilesClient({
                     aria-label={`Select ${folder.name}`}
                   />
                 )}
-                <FolderIcon className="h-10 w-10 text-primary" />
+                <FileTile kind="folder" size="lg" className="transition-transform duration-300 group-hover/card:scale-110 group-hover/card:-rotate-3" />
                 <p className="text-sm font-medium truncate w-full">{folder.name}</p>
                 <p className="text-xs text-muted-foreground">Folder</p>
                 {!selectionMode && folderMenu(folder)}
@@ -949,7 +997,7 @@ export default function FilesClient({
               <div
                 key={file.id}
                 className={cn(
-                  "relative rounded-2xl border bg-card/80 backdrop-blur p-4 cursor-pointer flex flex-col items-center text-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5",
+                  "group/card relative rounded-2xl border bg-card/80 backdrop-blur p-4 pt-5 cursor-pointer flex flex-col items-center text-center gap-2.5 transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/10",
                   ENTER_ANIMATION,
                   selectionMode && selectedFiles.has(file.id) && "ring-2 ring-primary"
                 )}
@@ -968,7 +1016,7 @@ export default function FilesClient({
                     aria-label={`Select ${file.name}`}
                   />
                 )}
-                <FileTypeIcon file={file} className="h-10 w-10 text-muted-foreground" />
+                <FileTile kind={fileKind(file.mime_type, file.name)} size="lg" className="transition-transform duration-300 group-hover/card:scale-110 group-hover/card:-rotate-3" />
                 <p className="text-sm font-medium truncate w-full">{file.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {formatBytes(file.size)}

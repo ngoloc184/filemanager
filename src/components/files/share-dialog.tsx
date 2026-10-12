@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { Check, Copy, Link2, Loader2, Trash2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";

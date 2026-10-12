@@ -2,41 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import {
   Clock,
   Download,
-  File,
-  FileArchive,
-  FileAudio,
-  FileImage,
-  FileText,
-  FileVideo,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PreviewDialog } from "@/components/files/file-dialogs";
 import { downloadFile, listRecentFiles } from "@/lib/services/files";
 import { getErrorMessage, type FileRow } from "@/lib/types/database";
+import { FileTile, fileKind } from "@/components/files/file-tile";
 import { cn, ENTER_ANIMATION, formatBytes, staggerDelay } from "@/lib/utils";
-
-function RecentFileIcon({ file }: { file: FileRow }) {
-  const className = "h-5 w-5 text-muted-foreground shrink-0";
-  if (file.mime_type.startsWith("image/"))
-    return <FileImage className={className} />;
-  if (file.mime_type.startsWith("video/"))
-    return <FileVideo className={className} />;
-  if (file.mime_type.startsWith("audio/"))
-    return <FileAudio className={className} />;
-  if (
-    file.mime_type === "application/pdf" ||
-    file.mime_type.startsWith("text/")
-  )
-    return <FileText className={className} />;
-  if (["zip", "rar", "7z", "tar", "gz"].includes(file.extension))
-    return <FileArchive className={className} />;
-  return <File className={className} />;
-}
 
 export default function RecentClient({
   user,
@@ -115,7 +92,7 @@ export default function RecentClient({
               style={staggerDelay(index)}
               onClick={() => setPreviewFile(file)}
             >
-              <RecentFileIcon file={file} />
+              <FileTile kind={fileKind(file.mime_type, file.name)} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{file.name}</p>
                 <p className="text-xs text-muted-foreground">
