@@ -13,6 +13,7 @@ import { AuroraBackground } from "@/components/brand/aurora-background";
 import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { CommandPalette, openCommandPalette } from "@/components/command-palette";
+import { AssistantWidget, clearAssistantHistory } from "@/components/assistant/assistant-widget";
 import { NAV_ITEMS, isActive, type NavItem } from "@/components/navigation";
 import { cn } from "@/lib/utils";
 
@@ -171,6 +172,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
 
   const handleLogout = async () => {
+    clearAssistantHistory();
     await createClient().auth.signOut();
     toast.success("Signed out");
     router.push("/login");
@@ -183,6 +185,7 @@ export default function DashboardLayout({
     <div className="relative flex min-h-screen">
       <AuroraBackground variant="subtle" />
       <CommandPalette onSignOut={handleLogout} />
+      <AssistantWidget userId={user.id} />
 
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-[17rem] shrink-0 border-r bg-sidebar/60 backdrop-blur-2xl lg:block">

@@ -65,7 +65,7 @@ export default function UploadPanel({
   const done = tasks.filter((task) => task.status === "done").length;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border bg-popover/95 backdrop-blur-xl shadow-2xl animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
+    <div className="fixed bottom-24 right-4 z-50 w-80 sm:bottom-5 sm:right-24 max-w-[calc(100vw-2rem)] rounded-2xl border bg-popover/95 backdrop-blur-xl shadow-2xl animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
       <div
         className="flex items-center justify-between px-4 py-3 cursor-pointer select-none"
         onClick={onToggle}
