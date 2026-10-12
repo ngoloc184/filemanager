@@ -211,6 +211,38 @@ export default function FilesClient({
     router.replace(folderId ? `/dashboard?folder=${folderId}` : "/dashboard");
   }, [intent, folderId, router]);
 
+  // ?file=<id> (e.g. "Open file" in the assistant): preview that file once.
+  // Access is enforced by row-level security when the file is fetched.
+  const fileParam = searchParams.get("file");
+  useEffect(() => {
+    if (!fileParam || loading) return;
+    const clearParam = () =>
+      router.replace(folderId ? `/dashboard?folder=${folderId}` : "/dashboard");
+    const local = files.find((file) => file.id === fileParam);
+    if (local) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPreviewFile(local);
+      clearParam();
+      return;
+    }
+    let cancelled = false;
+    getFile(fileParam)
+      .then((file) => {
+        if (cancelled) return;
+        if (file.deleted_at) toast.error("This file is in the trash.");
+        else setPreviewFile(file);
+      })
+      .catch(() => {
+        if (!cancelled) toast.error("This file could not be opened or you no longer have access.");
+      })
+      .finally(() => {
+        if (!cancelled) clearParam();
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fileParam, loading, files, folderId, router]);
+
   const navigateTo = (fid: string | null) => {
     setFilter("");
     router.replace(fid ? `/dashboard?folder=${fid}` : "/dashboard");

@@ -38,7 +38,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280012...`)
+   (`202608280001...` through `202608280016...`)
 4. Migrate existing batch data into the new file system (idempotent, safe to re-run):
 
    ```sql
@@ -88,6 +88,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 npm run lint       # ESLint
 npm run typecheck  # next typegen && tsc --noEmit
 npm test           # unit tests (node:test)
+npm run test:db    # SQL permission tests (needs PostgreSQL, see docs/ai-assistant.md)
 npm run build      # production build
 ```
 
@@ -164,6 +165,14 @@ curl -X PUT https://<domain>/api/superapp/versions/transfer \
 `400` for a bad name (`^[a-z0-9][a-z0-9_-]{0,63}$`) or version (`x.y.z`), and
 `409` unless the version is numerically greater than the current one
 (`0.10.0` > `0.9.0`).
+
+## AI Assistant
+
+A permission-aware chatbox (bottom-right in the app, `Ctrl/⌘ + J`) that finds
+files by name, type, date, sharing and content, lists what you shared, shows
+statistics and summarizes documents locally, without any external AI. Run
+migration `202608280016_assistant_search.sql`. Setup, security model,
+optional local/cloud LLM and operations: [docs/ai-assistant.md](docs/ai-assistant.md).
 
 ## Project Structure
 

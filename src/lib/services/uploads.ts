@@ -8,6 +8,19 @@ import {
 } from "@/lib/storage";
 import { getErrorMessage, type FileRow } from "@/lib/types/database";
 
+/**
+ * Asks the server to index the file's text for the AI assistant. Fire and
+ * forget: uploads never wait for or fail because of indexing.
+ */
+function requestIndexing(fileId: string): void {
+  void fetch("/api/assistant/index", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fileId }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 /** Files above this size are not hashed client-side (to bound memory use). */
 const MAX_CHECKSUM_BYTES = 50 * 1024 * 1024;
 
@@ -134,6 +147,7 @@ export async function uploadOne(
     if (error) throw error;
     onStatus("done");
     notifyQuotaChanged();
+    requestIndexing(fileId);
     return data as FileRow;
   } catch (err) {
     // keep storage and metadata consistent: remove orphan object
@@ -167,6 +181,7 @@ export async function uploadNewVersion(
     });
     if (error) throw error;
     notifyQuotaChanged();
+    requestIndexing(fileId);
   } catch (err) {
     // keep storage and metadata consistent: remove orphan object
     await removeOrphanObject(storagePath);
