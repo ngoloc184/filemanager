@@ -48,7 +48,11 @@ export async function POST(request: Request) {
     const result = await indexer({ fileId, limit: fileId ? 1 : 8, budgetMs: 45_000 });
     return json(result);
   } catch (error) {
-    console.error("assistant indexing failed", (error as { code?: string })?.code ?? "error");
+    const code = (error as { code?: string })?.code ?? "error";
+    console.error("assistant indexing failed", code);
+    if (["PGRST202", "PGRST205", "42883", "42P01"].includes(code)) {
+      return json({ error: "Assistant migration 202608280016 has not been applied." }, 503);
+    }
     return json({ error: "Indexing failed" }, 500);
   }
 }
