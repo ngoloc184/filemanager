@@ -17,7 +17,7 @@ import { formatBytes } from "@/lib/utils";
 function StatusIcon({ task }: { task: UploadTask }) {
   switch (task.status) {
     case "done":
-      return <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />;
+      return <CheckCircle2 className="h-4 w-4 text-success shrink-0" />;
     case "failed":
       return <XCircle className="h-4 w-4 text-destructive shrink-0" />;
     case "uploading":
@@ -65,7 +65,7 @@ export default function UploadPanel({
   const done = tasks.filter((task) => task.status === "done").length;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-white shadow-2xl">
+    <div className="fixed bottom-4 right-4 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border bg-popover/95 backdrop-blur-xl shadow-2xl animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
       <div
         className="flex items-center justify-between px-4 py-3 cursor-pointer select-none"
         onClick={onToggle}
@@ -76,7 +76,7 @@ export default function UploadPanel({
           ) : failed > 0 ? (
             <XCircle className="h-4 w-4 text-destructive" />
           ) : (
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <CheckCircle2 className="h-4 w-4 text-success" />
           )}
           {active > 0
             ? `Uploading ${active} of ${tasks.length}...`

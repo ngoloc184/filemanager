@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Toaster } from "react-hot-toast";
+import { ThemeProvider } from "@/components/theme/theme-provider";
+import { AppToaster } from "@/components/theme/app-toaster";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,29 +15,34 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "File Manager - Upload Management",
-  description: "Upload and manage your files with ease",
+  title: {
+    default: "File Manager — Upload, organize and share files",
+    template: "%s · File Manager",
+  },
+  description:
+    "A fast, secure file manager: drag-and-drop uploads, folders, version history, sharing links and an API for delivering app bundles.",
+  applicationName: "File Manager",
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f8f8fc" },
+    { media: "(prefers-color-scheme: dark)", color: "#111220" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {children}
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 3000,
-            style: {
-              background: "#fff",
-              color: "#333",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-            },
-          }}
-        />
+        <ThemeProvider>
+          {children}
+          <AppToaster />
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -37,7 +37,7 @@ import {
 import { listMyTags, type MyTag } from "@/lib/services/tags";
 import { downloadFile } from "@/lib/services/files";
 import { getErrorMessage } from "@/lib/types/database";
-import { cn, formatBytes } from "@/lib/utils";
+import { cn, ENTER_ANIMATION, formatBytes, staggerDelay } from "@/lib/utils";
 import { PreviewDialog } from "@/components/files/file-dialogs";
 
 const PAGE_SIZE = 25;
@@ -233,7 +233,7 @@ export default function SearchClient({
       </div>
 
       {showFilters && (
-        <div className="rounded-xl border bg-white p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="rounded-2xl border bg-card/80 backdrop-blur shadow-sm p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Extension</label>
             <Input
@@ -355,7 +355,7 @@ export default function SearchClient({
           </Button>
         </div>
       ) : results && results.length === 0 ? (
-        <div className="rounded-xl border bg-white flex flex-col items-center justify-center py-16 px-4">
+        <div className="rounded-2xl border border-dashed bg-card/70 backdrop-blur flex flex-col items-center justify-center py-16 px-4">
           <Search className="h-16 w-16 text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-semibold">No results</h3>
           <p className="text-muted-foreground mt-1 text-center">
@@ -363,11 +363,12 @@ export default function SearchClient({
           </p>
         </div>
       ) : (
-        <div className={cn("rounded-xl border bg-white divide-y", loading && "opacity-60")}>
-          {results?.map((row) => (
+        <div className={cn("rounded-2xl border bg-card/80 backdrop-blur shadow-sm divide-y overflow-hidden", loading && "opacity-60")}>
+          {results?.map((row, index) => (
             <div
               key={row.file_id}
-              className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50"
+              className={cn("flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50", ENTER_ANIMATION)}
+              style={staggerDelay(index)}
               onClick={() => setPreview(row)}
             >
               <File className="h-5 w-5 text-muted-foreground shrink-0" />
