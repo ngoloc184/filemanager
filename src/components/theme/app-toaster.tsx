@@ -1,24 +1,22 @@
 "use client";
 
-import { Toaster } from "react-hot-toast";
+import { Toaster } from "sonner";
+import { useTheme } from "next-themes";
 
-/** Toasts styled with the theme tokens so they follow light/dark mode. */
+/** Stacked, swipeable toasts that follow the active light/dark theme. */
 export function AppToaster() {
+  const { resolvedTheme } = useTheme();
   return (
     <Toaster
-      position="top-right"
+      position="bottom-right"
+      theme={resolvedTheme === "dark" ? "dark" : "light"}
+      richColors
+      closeButton
       toastOptions={{
-        duration: 3000,
-        style: {
-          background: "var(--popover)",
-          color: "var(--popover-foreground)",
-          border: "1px solid var(--border)",
-          borderRadius: "calc(var(--radius) * 1.2)",
-          boxShadow: "0 12px 32px -12px rgb(0 0 0 / 0.25)",
-          fontSize: "0.875rem",
+        duration: 3500,
+        classNames: {
+          toast: "!rounded-2xl !border !shadow-2xl backdrop-blur-xl",
         },
-        success: { iconTheme: { primary: "var(--success)", secondary: "var(--card)" } },
-        error: { iconTheme: { primary: "var(--destructive)", secondary: "var(--card)" } },
       }}
     />
   );

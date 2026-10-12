@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthShell } from "@/components/auth/auth-shell";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import { UserPlus, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 

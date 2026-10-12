@@ -2,14 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import {
   ChevronLeft,
   ChevronRight,
   Download,
   Eye,
-  File,
   FolderOpen,
   Loader2,
   Search,
@@ -37,6 +36,7 @@ import {
 import { listMyTags, type MyTag } from "@/lib/services/tags";
 import { downloadFile } from "@/lib/services/files";
 import { getErrorMessage } from "@/lib/types/database";
+import { FileTile, fileKind } from "@/components/files/file-tile";
 import { cn, ENTER_ANIMATION, formatBytes, staggerDelay } from "@/lib/utils";
 import { PreviewDialog } from "@/components/files/file-dialogs";
 
@@ -371,7 +371,7 @@ export default function SearchClient({
               style={staggerDelay(index)}
               onClick={() => setPreview(row)}
             >
-              <File className="h-5 w-5 text-muted-foreground shrink-0" />
+              <FileTile kind={fileKind(row.mime_type, row.name)} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{row.name}</p>
                 <p className="text-xs text-muted-foreground truncate">

@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import {
-  File,
-  Folder as FolderIcon,
   Loader2,
   RotateCcw,
   Trash2,
@@ -28,6 +26,7 @@ import {
   type TrashItem,
 } from "@/lib/services/trash";
 import { getErrorMessage } from "@/lib/types/database";
+import { FileTile, fileKind } from "@/components/files/file-tile";
 import { cn, ENTER_ANIMATION, formatBytes, staggerDelay } from "@/lib/utils";
 
 export default function TrashClient() {
@@ -146,9 +145,9 @@ export default function TrashClient() {
               style={staggerDelay(index)}
             >
               {item.item_type === "folder" ? (
-                <FolderIcon className="h-5 w-5 text-primary shrink-0" />
+                <FileTile kind="folder" />
               ) : (
-                <File className="h-5 w-5 text-muted-foreground shrink-0" />
+                <FileTile kind={fileKind(null, item.name)} />
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{item.name}</p>

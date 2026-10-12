@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { UserPlus, UsersRound, Trash2 } from "lucide-react";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

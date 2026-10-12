@@ -117,6 +117,11 @@ export default function UploadPanel({
                 >
                   {formatBytes(task.file.size)} • {statusLabel(task)}
                 </p>
+                {(task.status === "uploading" || task.status === "registering") && (
+                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
+                    <div className="progress-indeterminate h-full w-full rounded-full" />
+                  </div>
+                )}
               </div>
               {task.status === "failed" && (
                 <Button
