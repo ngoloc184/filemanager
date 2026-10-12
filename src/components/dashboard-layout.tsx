@@ -2,18 +2,18 @@
 
 import { ReactNode, useState } from "react";
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { toast } from "sonner";
 import { Command, LogOut, Menu, Search, X } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { signOutAction } from "@/lib/auth/actions";
+import { resetBrowserSession } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import StorageUsage from "@/components/files/storage-usage";
 import { AuroraBackground } from "@/components/brand/aurora-background";
 import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { CommandPalette, openCommandPalette } from "@/components/command-palette";
-import { NAV_ITEMS, isActive, type NavItem } from "@/components/navigation";
+import { ACCOUNT_ITEM, NAV_ITEMS, isActive, type NavItem } from "@/components/navigation";
 import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
@@ -135,16 +135,26 @@ function SidebarContent({
         <div className="rounded-2xl border bg-background/50 p-1 shadow-sm">
           <StorageUsage />
         </div>
-        <div className="flex items-center gap-3 rounded-xl px-2 py-2">
+        <Link
+          href={ACCOUNT_ITEM.href}
+          onClick={onNavigate}
+          aria-current={isActive(pathname, ACCOUNT_ITEM.href) ? "page" : undefined}
+          title={ACCOUNT_ITEM.label}
+          className={cn(
+            "flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-muted/60",
+            isActive(pathname, ACCOUNT_ITEM.href) && "bg-primary/10"
+          )}
+        >
           <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white shadow-md shadow-primary/25">
             {email?.charAt(0).toUpperCase() || "U"}
             <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar bg-success" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{email}</p>
-            <p className="text-[11px] text-muted-foreground">Personal workspace</p>
+            <p className="text-[11px] text-muted-foreground">{ACCOUNT_ITEM.label}</p>
           </div>
-        </div>
+          <ACCOUNT_ITEM.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </Link>
         <div className="flex items-center justify-between gap-2 px-1">
           <ThemeToggle layoutId={`${indicatorId}-theme`} />
           <Button
@@ -167,17 +177,17 @@ export default function DashboardLayout({
   user,
 }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const router = useRouter();
   const pathname = usePathname();
 
   const handleLogout = async () => {
-    await createClient().auth.signOut();
-    toast.success("Signed out");
-    router.push("/login");
-    router.refresh();
+    // Revoke the session on the server, then reload so no signed-in state
+    // (cached token, React state with file data) survives in this tab.
+    resetBrowserSession();
+    await signOutAction();
+    window.location.replace("/login?message=signed_out");
   };
 
-  const current = NAV_ITEMS.find((item) => isActive(pathname, item.href));
+  const current = [...NAV_ITEMS, ACCOUNT_ITEM].find((item) => isActive(pathname, item.href));
 
   return (
     <div className="relative flex min-h-screen">

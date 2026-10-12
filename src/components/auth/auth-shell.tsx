@@ -11,12 +11,20 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-const HIGHLIGHTS = [
-  { icon: UploadCloud, title: "Drag, drop, done", body: "Upload whole folders of work in seconds with live progress." },
-  { icon: History, title: "Every version kept", body: "Roll back any file to a previous version in one click." },
-  { icon: ShieldCheck, title: "Share with confidence", body: "Role-based access and public links you control." },
-  { icon: Zap, title: "Delivered from the edge", body: "Versioned files cached worldwide for instant loads." },
-];
+const HIGHLIGHTS = {
+  en: [
+    { icon: UploadCloud, title: "Drag, drop, done", body: "Upload whole folders of work in seconds with live progress." },
+    { icon: History, title: "Every version kept", body: "Roll back any file to a previous version in one click." },
+    { icon: ShieldCheck, title: "Share with confidence", body: "Role-based access and public links you control." },
+    { icon: Zap, title: "Delivered from the edge", body: "Versioned files cached worldwide for instant loads." },
+  ],
+  vi: [
+    { icon: UploadCloud, title: "Kéo, thả, xong", body: "Tải lên cả thư mục trong vài giây, theo dõi tiến độ trực tiếp." },
+    { icon: History, title: "Giữ mọi phiên bản", body: "Khôi phục file về phiên bản trước chỉ với một cú nhấp." },
+    { icon: ShieldCheck, title: "Chia sẻ an toàn", body: "Phân quyền theo vai trò và liên kết công khai do bạn kiểm soát." },
+    { icon: Zap, title: "Tải nhanh mọi nơi", body: "File theo phiên bản được lưu đệm toàn cầu, mở tức thì." },
+  ],
+};
 
 const FLOATING: { kind: FileKind; x: string; y: string; delay: number; rotate: number }[] = [
   { kind: "pdf", x: "12%", y: "18%", delay: 0, rotate: -10 },
@@ -26,16 +34,20 @@ const FLOATING: { kind: FileKind; x: string; y: string; delay: number; rotate: n
   { kind: "code", x: "46%", y: "80%", delay: 1.1, rotate: -4 },
 ];
 
-function Showcase() {
+function Showcase({ lang }: { lang?: string }) {
+  const highlights = lang === "vi" ? HIGHLIGHTS.vi : HIGHLIGHTS.en;
   const [index, setIndex] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setIndex((i) => (i + 1) % HIGHLIGHTS.length), 3200);
+    const id = setInterval(() => setIndex((i) => (i + 1) % highlights.length), 3200);
     return () => clearInterval(id);
-  }, []);
-  const { icon: Icon, title, body } = HIGHLIGHTS[index];
+  }, [highlights.length]);
+  const { icon: Icon, title, body } = highlights[index];
 
   return (
-    <div className="grain relative hidden overflow-hidden rounded-[2rem] border bg-card/40 backdrop-blur-xl lg:flex lg:flex-col lg:justify-end">
+    <div
+      lang={lang}
+      className="grain relative hidden overflow-hidden rounded-[2rem] border bg-card/40 backdrop-blur-xl lg:flex lg:flex-col lg:justify-end"
+    >
       <BorderBeam duration={12} />
       <div className="hero-beams opacity-80" />
       <div className="dot-pattern pointer-events-none absolute inset-0 opacity-50 [mask-image:radial-gradient(ellipse_at_center,#000,transparent_75%)]" />
@@ -78,7 +90,7 @@ function Showcase() {
           </motion.div>
         </AnimatePresence>
         <div className="mt-5 flex gap-1.5">
-          {HIGHLIGHTS.map((h, i) => (
+          {highlights.map((h, i) => (
             <span key={h.title} className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
               {i === index && (
                 <motion.span
@@ -107,12 +119,15 @@ export function AuthShell({
   description,
   children,
   footer,
+  lang,
 }: {
   icon: ReactNode;
   title: ReactNode;
   description: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /** Language of the page content when it differs from the document's. */
+  lang?: string;
 }) {
   return (
     <div className="relative min-h-screen">
@@ -124,7 +139,7 @@ export function AuthShell({
             <ThemeToggle layoutId="auth-theme-pill" />
           </header>
 
-          <main className="flex flex-1 items-center justify-center py-10">
+          <main lang={lang} className="flex flex-1 items-center justify-center py-10">
             <motion.div
               initial={{ opacity: 0, y: 24, filter: "blur(10px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -146,7 +161,7 @@ export function AuthShell({
             </motion.div>
           </main>
         </div>
-        <Showcase />
+        <Showcase lang={lang} />
       </div>
     </div>
   );

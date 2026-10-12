@@ -9,7 +9,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 - **Batch Comments**: Add and edit comments for each upload batch
 - **File Management**: Download, view, and delete individual files
 - **Search**: Search through batches and files
-- **Authentication**: Secure login with email/password
+- **Authentication**: Sign up with any e-mail address (verified by link or 6-digit code), "Continue with Google", magic link, password reset, "Remember me" sessions in HttpOnly cookies, account linking and an account security page (see [docs/AUTH_SETUP.md](docs/AUTH_SETUP.md))
 - **Responsive Design**: Works on desktop and mobile
 
 ## Tech Stack
@@ -38,7 +38,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280012...`)
+   (`202608280001...` through `202608280016...`)
 4. Migrate existing batch data into the new file system (idempotent, safe to re-run):
 
    ```sql
@@ -68,10 +68,19 @@ Edit `.env.local` with your Supabase credentials:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+SITE_URL=http://localhost:3000
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` is only read on the server by the public share-link
-endpoints (`/api/public-share/*`). Never expose it with a `NEXT_PUBLIC_` prefix.
+`SUPABASE_SERVICE_ROLE_KEY` is only read on the server (public share-link
+endpoints and the sign-in rate limiter). Never expose it with a `NEXT_PUBLIC_`
+prefix. `SITE_URL` is the public origin used in e-mail links and OAuth
+redirects.
+
+### 4b. Configure sign-in (e-mail, Google, SMTP)
+
+Follow [docs/AUTH_SETUP.md](docs/AUTH_SETUP.md) (Vietnamese): Supabase redirect
+URLs, e-mail confirmation, Google OAuth client, custom SMTP and the e-mail
+templates in `supabase/templates/`.
 
 ### 5. Run the Development Server
 
@@ -168,21 +177,26 @@ curl -X PUT https://<domain>/api/superapp/versions/transfer \
 ## Project Structure
 
 ```
-proxy.ts                   # Session refresh + auth redirect (Next.js proxy)
 src/
+├── proxy.ts               # Session refresh (token rotation) + auth redirects (Next.js proxy)
 ├── app/
 │   ├── (dashboard)/       # Signed-in area sharing one layout + auth check
 │   │   ├── dashboard/     # My Files (folders, uploads, versions)
 │   │   ├── recent/  search/  shared/  trash/  activity/  contacts/
+│   │   ├── account/       # Account & security (sign-in methods, password, e-mail)
+│   ├── api/auth/token/    # Short-lived access token for the browser client
 │   ├── api/public-share/  # Public share-link download + info endpoints
+│   ├── auth/              # google/ (start OAuth), callback/, confirm/ (e-mail links)
 │   ├── share/[token]/     # Public share-link landing page
-│   ├── login/  register/  setup/
+│   ├── login/  register/  forgot-password/  reset-password/  magic-link/  setup/
 ├── components/
 │   ├── ui/                # shadcn/ui (base-ui) primitives
+│   ├── auth/              # Sign-in / sign-up / account forms
 │   ├── files/             # File manager feature components
 │   └── dashboard-layout.tsx
 ├── lib/
 │   ├── auth.ts            # Cached server-side user lookup / requireUser()
+│   ├── auth/              # Auth Server Actions, validation, rate limiting, cookie policy
 │   ├── public-share.ts    # Server-only share-link validation
 │   ├── storage.ts         # Bucket name + storage path helpers
 │   ├── services/          # Client-side data access (Supabase RPC/Storage)
@@ -190,7 +204,10 @@ src/
 │   └── types/
 supabase/
 ├── schema.sql
-└── migrations/            # Apply in filename order
+├── migrations/            # Apply in filename order
+└── templates/             # Auth e-mail templates (paste into Supabase)
+docs/
+└── AUTH_SETUP.md          # Auth configuration, security notes, test results
 ```
 
 ## Deployment

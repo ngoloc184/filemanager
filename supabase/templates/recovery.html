@@ -1,0 +1,7 @@
+<!-- Paste into Supabase Dashboard > Authentication > Email Templates. See docs/AUTH_SETUP.md. -->
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#111">
+    <h2 style="margin:0 0 16px">Đặt lại mật khẩu</h2>
+    <p style="line-height:1.6">Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho <strong>{{ .Email }}</strong>.</p>
+    <p style="margin:24px 0"><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=recovery&amp;next=/reset-password" style="display:inline-block;padding:12px 22px;border-radius:12px;background:#6d4aff;color:#ffffff;text-decoration:none;font-weight:600">Đặt mật khẩu mới</a></p>
+    <p style="margin-top:28px;font-size:13px;color:#666;line-height:1.5">Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này — mật khẩu hiện tại vẫn giữ nguyên.</p>
+</div>

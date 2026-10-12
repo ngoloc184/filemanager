@@ -1,0 +1,7 @@
+<!-- Paste into Supabase Dashboard > Authentication > Email Templates. See docs/AUTH_SETUP.md. -->
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#111">
+    <h2 style="margin:0 0 16px">Xác nhận đổi email</h2>
+    <p style="line-height:1.6">Hãy xác nhận việc đổi email đăng nhập từ <strong>{{ .Email }}</strong> sang <strong>{{ .NewEmail }}</strong>.</p>
+    <p style="margin:24px 0"><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email_change" style="display:inline-block;padding:12px 22px;border-radius:12px;background:#6d4aff;color:#ffffff;text-decoration:none;font-weight:600">Xác nhận đổi email</a></p>
+    <p style="margin-top:28px;font-size:13px;color:#666;line-height:1.5">Nếu bạn không yêu cầu đổi email, hãy đổi mật khẩu ngay và liên hệ quản trị viên.</p>
+</div>

@@ -1,47 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { AuthShell } from "@/components/auth/auth-shell";
-import { toast } from "sonner";
 import { UserPlus, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { createAdminAction } from "@/lib/auth/actions";
+import { AuthShell } from "@/components/auth/auth-shell";
+import { CheckEmailPanel } from "@/components/auth/check-email-panel";
+import {
+  Field,
+  FormAlert,
+  PasswordInput,
+  SubmitButton,
+  TextInput,
+  fieldAria,
+} from "@/components/auth/form-parts";
+import { PasswordChecklist } from "@/components/auth/password-checklist";
+import { useAuthForm } from "@/components/auth/use-auth-form";
 
 export default function SetupPage() {
+  const { state, pending, errors, formError, onSubmit, touch } = useAuthForm(createAdminAction);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleCreateAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    const { error } = await createClient().auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          role: "admin",
-        },
-      },
-    });
-
-    if (error) {
-      toast.error(error.message);
-      setLoading(false);
-      return;
-    }
-
-    toast.success(
-      "Admin account created! Check your email for verification if email confirmation is enabled."
-    );
-    setEmail("");
-    setPassword("");
-    setLoading(false);
-  };
+  const [showSent, setShowSent] = useState(true);
 
   return (
     <AuthShell
@@ -58,36 +38,61 @@ export default function SetupPage() {
         </Link>
       }
     >
-      <form onSubmit={handleCreateAdmin} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="admin@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="h-10"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
+      {state.status === "success" && showSent ? (
+        <CheckEmailPanel
+          email={state.email ?? email}
+          purpose="signup"
+          message={state.message ?? ""}
+          onChangeEmail={() => setShowSent(false)}
+        />
+      ) : (
+        <form
+          onSubmit={(event) => {
+            setShowSent(true);
+            onSubmit(event);
+          }}
+          className="space-y-4"
+          noValidate
+        >
+          {formError && <FormAlert tone="error">{formError}</FormAlert>}
+          <Field id="email" label="Email" error={errors.email}>
+            <TextInput
+              {...fieldAria("email", errors.email)}
+              name="email"
+              type="email"
+              placeholder="admin@example.com"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                touch("email");
+              }}
+              required
+            />
+          </Field>
+          <Field
             id="password"
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            className="h-10"
-          />
-        </div>
-        <Button type="submit" variant="brand" className="h-10 w-full" disabled={loading}>
-          {loading ? "Creating..." : "Create admin account"}
-        </Button>
-      </form>
+            label="Password"
+            error={errors.password}
+            hint={<PasswordChecklist password={password} email={email} />}
+          >
+            <PasswordInput
+              {...fieldAria("password", errors.password, true)}
+              name="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                touch("password");
+              }}
+              required
+            />
+          </Field>
+          <SubmitButton pending={pending} pendingLabel="Creating...">
+            Create admin account
+          </SubmitButton>
+        </form>
+      )}
     </AuthShell>
   );
 }

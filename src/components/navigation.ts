@@ -5,6 +5,7 @@ import {
   Share2,
   Trash2,
   Upload,
+  UserCog,
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
@@ -21,6 +22,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/activity", label: "Activity", icon: History },
   { href: "/contacts", label: "Related users", icon: UsersRound },
 ];
+
+/** Account settings, reached from the user card in the sidebar. */
+export const ACCOUNT_ITEM: NavItem = { href: "/account", label: "Tài khoản & bảo mật", icon: UserCog };
 
 export function isActive(pathname: string, href: string): boolean {
   // "My Files" is only active on the root dashboard route

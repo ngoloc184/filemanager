@@ -17,7 +17,7 @@ import {
   Sun,
   UploadCloud,
 } from "lucide-react";
-import { NAV_ITEMS, sendFilesCommand, type FilesCommand } from "@/components/navigation";
+import { ACCOUNT_ITEM, NAV_ITEMS, sendFilesCommand, type FilesCommand } from "@/components/navigation";
 
 const OPEN_EVENT = "fm:open-command-palette";
 
@@ -177,6 +177,12 @@ export function CommandPalette({ onSignOut }: { onSignOut: () => void }) {
                 </Group>
 
                 <Group heading="Account">
+                  <Item
+                    value="account settings security password google tai khoan"
+                    onSelect={() => run(() => router.push(ACCOUNT_ITEM.href))}
+                  >
+                    <ACCOUNT_ITEM.icon /> {ACCOUNT_ITEM.label}
+                  </Item>
                   <Item value="sign out logout" onSelect={() => run(onSignOut)}>
                     <LogOut /> Sign out
                   </Item>

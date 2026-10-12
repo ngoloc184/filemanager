@@ -1,0 +1,9 @@
+<!-- Paste into Supabase Dashboard > Authentication > Email Templates. See docs/AUTH_SETUP.md. -->
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#111">
+    <h2 style="margin:0 0 16px">Đăng nhập vào File Manager</h2>
+    <p style="line-height:1.6">Nhấn nút bên dưới để đăng nhập vào tài khoản <strong>{{ .Email }}</strong> mà không cần mật khẩu.</p>
+    <p style="margin:24px 0"><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email&amp;next=/dashboard" style="display:inline-block;padding:12px 22px;border-radius:12px;background:#6d4aff;color:#ffffff;text-decoration:none;font-weight:600">Đăng nhập</a></p>
+    <p style="margin:24px 0 8px;color:#555">Hoặc nhập mã xác minh:</p>
+    <p style="font-size:26px;letter-spacing:6px;font-weight:700;margin:0">{{ .Token }}</p>
+    <p style="margin-top:28px;font-size:13px;color:#666;line-height:1.5">Nếu bạn không yêu cầu, hãy bỏ qua email này. Liên kết chỉ dùng được một lần.</p>
+</div>
