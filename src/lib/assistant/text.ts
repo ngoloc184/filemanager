@@ -55,3 +55,13 @@ const EN_STOP = [
 export const STOP_PHRASES: readonly string[] = [...VI_STOP, ...EN_STOP].sort(
   (a, b) => b.split(" ").length - a.split(" ").length || b.length - a.length
 );
+
+/**
+ * Original (accented) text from an index found in its normalized form. NFC
+ * text and its normalized form have the same length, so indexes line up.
+ */
+export function originalSlice(raw: string, start: number, end?: number): string {
+  const nfc = raw.normalize("NFC");
+  const n = normalize(nfc);
+  return n.length === nfc.length ? nfc.slice(start, end) : n.slice(start, end);
+}

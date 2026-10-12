@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
   ArrowUp,
+  Brain,
   Database,
   ExternalLink,
   FileSearch,
@@ -23,29 +24,33 @@ import { FileTile, fileKind } from "@/components/files/file-tile";
 import { onAiSummaryVisibility, openAiSummary } from "@/components/files/ai-summary-dialog";
 import { cn, formatBytes } from "@/lib/utils";
 import type { AssistantFile, AssistantReply } from "@/lib/assistant/types";
+import { ActionCard, AnswerView, ComparisonView, FeedbackBar, MemoryProposalCard, StepsView } from "./assistant-parts";
+import { MemoryPanel } from "./memory-panel";
 
 type Message =
   | { id: string; role: "user"; text: string }
   | { id: string; role: "assistant"; reply: AssistantReply; request: { message: string; page: number; contextFileId: string | null } }
   | { id: string; role: "error"; text: string; request: { message: string; page: number; contextFileId: string | null } };
 
-const STORAGE_PREFIX = "fm-assistant:v1:";
+const STORAGE_ROOT = "fm-assistant:";
+const STORAGE_PREFIX = `${STORAGE_ROOT}v2:`;
 const MAX_LENGTH = 500;
 const WELCOME =
-  "Xin chào! Tôi có thể giúp bạn tìm kiếm và tra cứu các tài liệu mà bạn có quyền truy cập.";
+  "Xin chào! Tôi trả lời dựa trên các tài liệu bạn có quyền truy cập, luôn kèm nguồn trích dẫn. Bạn có thể hỏi tiếp mà không cần nhắc lại tên file.";
 const STARTERS = [
   "Tìm file gần đây",
   "Tìm tài liệu theo tên",
-  "Liệt kê các file PDF",
-  "Tìm nội dung trong tài liệu",
-  "Thống kê file của tôi",
+  "Hỏi về nội dung tài liệu",
+  "So sánh hai tài liệu",
+  "Bạn nhớ gì về tôi?",
 ];
+const PROGRESS = ["Đang phân tích câu hỏi…", "Đang tìm trong tài liệu…", "Đang đọc và đối chiếu nguồn…", "Đang tổng hợp câu trả lời…"];
 
 /** Removes every saved conversation in this tab (called on sign-out). */
 export function clearAssistantHistory(): void {
   try {
     for (const key of Object.keys(sessionStorage)) {
-      if (key.startsWith(STORAGE_PREFIX)) sessionStorage.removeItem(key);
+      if (key.startsWith(STORAGE_ROOT)) sessionStorage.removeItem(key);
     }
   } catch {
     // storage unavailable
@@ -146,13 +151,17 @@ function FileCard({
 
 function ReplyView({
   reply,
+  question,
   onAsk,
+  onChoose,
   onMore,
   onIndex,
   indexing,
 }: {
   reply: AssistantReply;
+  question: string;
   onAsk: (message: string, contextFileId?: string | null) => void;
+  onChoose: (fileId: string, label: string) => void;
   onMore?: () => void;
   onIndex: () => void;
   indexing: boolean;
@@ -160,6 +169,26 @@ function ReplyView({
   return (
     <div className="space-y-2.5">
       <p className="whitespace-pre-line text-sm leading-relaxed">{reply.text}</p>
+
+      {reply.answer && reply.answer.citations.length > 0 && <AnswerView answer={reply.answer} />}
+      {reply.comparison && <ComparisonView comparison={reply.comparison} />}
+      {reply.action && <ActionCard action={reply.action} />}
+      {reply.memoryProposal && <MemoryProposalCard proposal={reply.memoryProposal} />}
+
+      {reply.choices && reply.choices.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {reply.choices.map((c) => (
+            <button
+              key={c.fileId}
+              type="button"
+              onClick={() => onChoose(c.fileId, c.label)}
+              className="truncate rounded-xl border bg-background/70 px-3 py-2 text-left text-sm transition-colors hover:border-primary/30"
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {reply.notices?.map((notice) => (
         <p key={notice} className="flex items-start gap-1.5 rounded-xl bg-warning/10 px-3 py-2 text-xs text-foreground/80">
@@ -295,8 +324,18 @@ function ReplyView({
         ))}
       </div>
 
+      {reply.steps && reply.steps.length > 1 && <StepsView steps={reply.steps} />}
+
+      {reply.replyId && !reply.action && !["greeting", "help", "memory"].includes(reply.intent) && (
+        <FeedbackBar
+          replyId={reply.replyId}
+          question={question}
+          citedFiles={[...new Set([...(reply.answer?.citations.map((c) => c.fileId) ?? []), ...(reply.files?.map((f) => f.id) ?? [])])].slice(0, 10)}
+        />
+      )}
+
       <p className="text-[10px] text-muted-foreground/70">
-        {reply.engine === "llm" ? "Có dùng mô hình AI tùy chọn cho phần tóm tắt" : "Xử lý cục bộ · không dùng AI bên ngoài"}
+        {reply.engine === "llm" ? "Có dùng mô hình AI tùy chọn (chỉ với các đoạn trích bạn được xem)" : "Xử lý cục bộ · không dùng AI bên ngoài · 0 token"}
       </p>
     </div>
   );
@@ -314,6 +353,8 @@ export function AssistantWidget({ userId }: { userId: string }) {
   const [indexing, setIndexing] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [view, setView] = useState<"chat" | "memory">("chat");
+  const [progress, setProgress] = useState(0);
   const reopenRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -373,28 +414,36 @@ export function AssistantWidget({ userId }: { userId: string }) {
     if (open) setTimeout(() => inputRef.current?.focus(), 150);
   }, [open]);
 
-  const lastContextFileId = useCallback((): string | null => {
+  useEffect(() => {
+    if (!pending) return;
+    setProgress(0);
+    const timer = setInterval(() => setProgress((p) => Math.min(p + 1, PROGRESS.length - 1)), 1400);
+    return () => clearInterval(timer);
+  }, [pending]);
+
+  /** Conversation state returned with the newest answer (signed by the server). */
+  const lastContext = useCallback((): unknown => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
       const m = messages[i];
-      if (m.role === "assistant" && m.reply.contextFileId) return m.reply.contextFileId;
+      if (m.role === "assistant" && m.reply.context) return m.reply.context;
     }
-    return null;
+    return undefined;
   }, [messages]);
 
   const send = useCallback(
     async (
       message: string,
-      options: { page?: number; contextFileId?: string | null; echo?: boolean } = {}
+      options: { page?: number; contextFileId?: string | null; echo?: boolean; echoText?: string } = {}
     ) => {
       const text = message.trim().slice(0, MAX_LENGTH);
       if (!text || pending) return;
       const request = {
         message: text,
         page: options.page ?? 1,
-        contextFileId: options.contextFileId === undefined ? lastContextFileId() : options.contextFileId,
+        contextFileId: options.contextFileId ?? null,
       };
-      if (options.echo !== false) {
-        setMessages((prev) => [...prev, { id: uid(), role: "user", text }]);
+      if (options.echo !== false || options.echoText) {
+        setMessages((prev) => [...prev, { id: uid(), role: "user", text: options.echoText ?? text }]);
       }
       setInput("");
       setPending(true);
@@ -404,7 +453,7 @@ export function AssistantWidget({ userId }: { userId: string }) {
         const response = await fetch("/api/assistant/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(request),
+          body: JSON.stringify({ ...request, context: lastContext() }),
           signal: controller.signal,
         });
         const data = (await response.json().catch(() => ({}))) as AssistantReply & { error?: string };
@@ -432,7 +481,7 @@ export function AssistantWidget({ userId }: { userId: string }) {
         abortRef.current = null;
       }
     },
-    [pending, lastContextFileId]
+    [pending, lastContext]
   );
 
   const runIndex = async () => {
@@ -491,7 +540,8 @@ export function AssistantWidget({ userId }: { userId: string }) {
   const pickStarter = (starter: string) => {
     const prefill: Record<string, string> = {
       "Tìm tài liệu theo tên": "Tìm file ",
-      "Tìm nội dung trong tài liệu": "Tìm tài liệu có nội dung nhắc đến ",
+      "Hỏi về nội dung tài liệu": "Theo tài liệu, ",
+      "So sánh hai tài liệu": "So sánh ",
     };
     if (prefill[starter]) {
       setInput(prefill[starter]);
@@ -504,6 +554,7 @@ export function AssistantWidget({ userId }: { userId: string }) {
   const newChat = () => {
     abortRef.current?.abort();
     setMessages([]);
+    setView("chat");
   };
 
   return (
@@ -541,7 +592,7 @@ export function AssistantWidget({ userId }: { userId: string }) {
             exit={{ opacity: 0, scale: 0.92, y: 24 }}
             transition={{ type: "spring", stiffness: 380, damping: 32 }}
             style={{ transformOrigin: "bottom right" }}
-            className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-popover/95 backdrop-blur-2xl sm:inset-auto sm:bottom-5 sm:right-5 sm:h-[min(600px,calc(100vh-9rem))] sm:w-[420px] sm:rounded-3xl sm:border sm:shadow-[0_30px_80px_-20px_rgb(0_0_0/0.45)]"
+            className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-popover/95 backdrop-blur-2xl sm:inset-auto sm:bottom-5 sm:right-5 sm:h-[min(640px,calc(100vh-7rem))] sm:w-[440px] sm:rounded-3xl sm:border sm:shadow-[0_30px_80px_-20px_rgb(0_0_0/0.45)]"
           >
             {/* Header */}
             <header className="flex items-center gap-3 border-b px-4 py-3">
@@ -552,14 +603,27 @@ export function AssistantWidget({ userId }: { userId: string }) {
                 <p className="text-sm font-semibold">AI Assistant</p>
                 <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   <span className="h-1.5 w-1.5 rounded-full bg-success" />
-                  Đang hoạt động · chỉ trong file bạn được phép xem
+                  Ghi nhớ ngữ cảnh · chỉ trong file bạn được phép xem
                 </p>
               </div>
               <button
                 type="button"
+                onClick={() => setView((v) => (v === "memory" ? "chat" : "memory"))}
+                title="Bộ nhớ của trợ lý"
+                aria-label="Bộ nhớ của trợ lý"
+                aria-pressed={view === "memory"}
+                className={cn(
+                  "rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  view === "memory" && "bg-primary/10 text-primary"
+                )}
+              >
+                <Brain className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
                 onClick={newChat}
-                title="Cuộc trò chuyện mới"
-                aria-label="Cuộc trò chuyện mới"
+                title="Xóa lịch sử, bắt đầu cuộc trò chuyện mới"
+                aria-label="Xóa lịch sử trò chuyện"
                 className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <RotateCcw className="h-4 w-4" />
@@ -587,6 +651,10 @@ export function AssistantWidget({ userId }: { userId: string }) {
               </button>
             </header>
 
+            {view === "memory" ? (
+              <MemoryPanel onBack={() => setView("chat")} />
+            ) : (
+            <>
             {/* Messages */}
             <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
               <div className="flex gap-2.5">
@@ -657,7 +725,9 @@ export function AssistantWidget({ userId }: { userId: string }) {
                     <div className="min-w-0 flex-1">
                       <ReplyView
                         reply={m.reply}
+                        question={m.request.message}
                         onAsk={ask}
+                        onChoose={(fileId, label) => void send(m.request.message, { contextFileId: fileId, echo: false, echoText: `→ ${label}` })}
                         indexing={indexing}
                         onIndex={() => void runIndex()}
                         onMore={
@@ -690,7 +760,7 @@ export function AssistantWidget({ userId }: { userId: string }) {
                         transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }}
                       />
                     ))}
-                    <span className="ml-1.5 text-xs text-muted-foreground">Đang tìm kiếm…</span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">{PROGRESS[progress]}</span>
                   </span>
                   <button
                     type="button"
@@ -713,7 +783,7 @@ export function AssistantWidget({ userId }: { userId: string }) {
                   onChange={(e) => setInput(e.target.value.slice(0, MAX_LENGTH))}
                   onKeyDown={onKeyDown}
                   rows={1}
-                  placeholder="Hỏi về file của bạn…"
+                  placeholder="Hỏi về file của bạn, hoặc hỏi tiếp…"
                   aria-label="Câu hỏi"
                   className="max-h-32 min-h-[2.25rem] flex-1 resize-none bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground [field-sizing:content]"
                 />
@@ -734,6 +804,8 @@ export function AssistantWidget({ userId }: { userId: string }) {
                 {input.length > 400 && <span>{input.length}/{MAX_LENGTH}</span>}
               </p>
             </form>
+            </>
+            )}
           </motion.section>
         )}
       </AnimatePresence>

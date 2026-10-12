@@ -12,7 +12,8 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.ts\"",
-    "test:db": "scripts/test-db.sh"
+    "test:db": "scripts/test-db.sh",
+    "eval:assistant": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/lib/assistant/eval/run.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

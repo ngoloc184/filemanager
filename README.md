@@ -38,7 +38,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280017...`)
+   (`202608280001...` through `202608280018...`)
 4. Migrate existing batch data into the new file system (idempotent, safe to re-run):
 
    ```sql
@@ -168,15 +168,20 @@ curl -X PUT https://<domain>/api/superapp/versions/transfer \
 
 ## AI Assistant
 
-A permission-aware chatbox (bottom-right in the app, `Ctrl/⌘ + J`) that finds
-files by name, type, date, sharing and content, lists what you shared, shows
-statistics and summarizes documents locally, without any external AI. Run
-migrations `202608280016_assistant_search.sql` and
-`202608280017_assistant_get_document.sql`. Every file menu (and the preview /
-details dialogs) also has **AI tóm tắt**: a structured Vietnamese summary
-(short / key points / detailed), copy, re-summarize and questions about the
-file. Setup, security model,
-optional local/cloud LLM and operations: [docs/ai-assistant.md](docs/ai-assistant.md).
+A permission-aware assistant (bottom-right in the app, `Ctrl/⌘ + J`) that
+understands follow-up questions (“tóm tắt file thứ hai”, “so sánh với hợp đồng
+năm trước”), answers from your documents with cited passages and conflict
+warnings, compares files, exports results to Excel/CSV/Markdown, creates
+folders / renames / moves / shares after you confirm, and remembers terms and
+preferences you ask it to (view and delete them in “Bộ nhớ”). It works fully
+without an AI model (0 tokens); an optional local or cloud model only words
+answers from permitted passages. Every file menu also has **AI tóm tắt**.
+
+Run migrations `202608280016_assistant_search.sql`,
+`202608280017_assistant_get_document.sql` and
+`202608280018_assistant_memory_feedback.sql`. Measure quality with
+`npm run eval:assistant`. Architecture, security model, configuration,
+feedback/tuning workflow and rollback: [docs/ai-assistant.md](docs/ai-assistant.md).
 
 ## Project Structure
 

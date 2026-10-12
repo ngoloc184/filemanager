@@ -3,8 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { answer, type AssistantRpc } from "@/lib/assistant/engine";
 import { MAX_QUESTION_LENGTH } from "@/lib/assistant/intent";
 import { createIndexer } from "@/lib/assistant/indexer";
-import { createLlmSummarizer } from "@/lib/assistant/llm";
+import { createLlmGroundedAnswer, createLlmSummarizer } from "@/lib/assistant/llm";
 import { createRateLimiter } from "@/lib/assistant/rate-limit";
+import { actionsConfigured, openContext, sealContext, signAction } from "@/lib/assistant/action-token";
+import { createMemoryStore, dailyTokenBudget, loadTuning, logEvent, optional, tokensUsedToday } from "@/lib/assistant/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,9 +25,11 @@ function json(body: unknown, status = 200) {
 /**
  * POST /api/assistant/chat — answers a question about the signed-in user's
  * files. The user is taken from the session cookie; every query runs with the
- * user's own database permissions (no service role, no free-form SQL).
+ * user's own database permissions (no service role, no free-form SQL). The
+ * conversation context is signed per user; ids in it are re-checked anyway.
  */
 export async function POST(request: Request) {
+  const started = Date.now();
   const supabase = await createClient();
   const {
     data: { user },
@@ -36,7 +40,7 @@ export async function POST(request: Request) {
     return json({ error: "Bạn đang hỏi quá nhanh, vui lòng thử lại sau ít giây." }, 429);
   }
 
-  let body: { message?: unknown; page?: unknown; contextFileId?: unknown };
+  let body: { message?: unknown; page?: unknown; contextFileId?: unknown; context?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -50,6 +54,8 @@ export async function POST(request: Request) {
   }
   const page = typeof body.page === "number" && Number.isFinite(body.page) ? body.page : 1;
   const contextFileId = typeof body.contextFileId === "string" ? body.contextFileId : null;
+  const opened = openContext(user.id, body.context);
+  if (JSON.stringify(opened.context ?? null).length > 8000) return json({ error: "Yêu cầu không hợp lệ." }, 400);
 
   const rpc = async <T,>(fn: AssistantRpc, args: Record<string, unknown>): Promise<T[]> => {
     const { data, error } = await supabase.rpc(fn, args);
@@ -57,28 +63,52 @@ export async function POST(request: Request) {
     return (data ?? []) as T[];
   };
 
+  // The optional model is used only while the user's daily budget lasts.
+  const summarizeWithLlm = createLlmSummarizer();
+  const answerWithLlm = createLlmGroundedAnswer();
+  const withinBudget = summarizeWithLlm || answerWithLlm ? (await tokensUsedToday(supabase)) < dailyTokenBudget() : false;
+  const [tuning, memoryReady] = await Promise.all([
+    loadTuning(supabase),
+    optional(async () => !(await supabase.from("assistant_memories").select("id").limit(1)).error, false),
+  ]);
+
   try {
     const result = await Promise.race([
       answer(
-        { message, page, contextFileId },
+        { message, page, contextFileId, context: opened.context },
         {
           rpc,
           indexPending: createIndexer(supabase),
-          summarizeWithLlm: createLlmSummarizer(),
+          summarizeWithLlm: withinBudget ? summarizeWithLlm : undefined,
+          answerWithLlm: withinBudget ? answerWithLlm : undefined,
+          memory: memoryReady ? createMemoryStore(supabase) : undefined,
+          findFolders: async (name: string) => {
+            const { data } = await supabase
+              .from("folders")
+              .select("id, name")
+              .is("deleted_at", null)
+              .ilike("name", `%${name.replace(/[%_\\]/g, (c) => `\\${c}`).slice(0, 100)}%`)
+              .limit(10);
+            return (data ?? []) as { id: string; name: string }[];
+          },
+          signAction: actionsConfigured() ? (spec) => signAction(user.id, spec) : undefined,
+          tuning,
+          contextTrusted: opened.trusted,
         }
       ),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), ANSWER_TIMEOUT_MS)),
     ]);
-    return json(result);
+    const replyId = await logEvent(supabase, { intent: result.intent, meta: result.meta, latencyMs: Date.now() - started });
+    return json({ ...result, replyId, context: result.context ? sealContext(user.id, result.context) : undefined });
   } catch (error) {
     const code = (error as { code?: string })?.code;
-    // Function or table missing: migration 202608280016 has not been applied.
+    // Function or table missing: an assistant migration has not been applied.
     if (code && MISSING_SCHEMA_CODES.has(code)) {
       console.error("assistant chat failed", code);
       return json(
         {
           error:
-            "Trợ lý chưa được cài đặt xong trên máy chủ: cần chạy migration supabase/migrations/202608280016_assistant_search.sql trong Supabase SQL Editor.",
+            "Trợ lý chưa được cài đặt xong trên máy chủ: cần chạy các migration 202608280016, 202608280017 và 202608280018 (thư mục supabase/migrations) trong Supabase SQL Editor.",
           code: "assistant_not_installed",
         },
         503
@@ -87,6 +117,7 @@ export async function POST(request: Request) {
     const timedOut = error instanceof Error && error.message === "timeout";
     // Log the failure type only, never the question or file data.
     console.error("assistant chat failed", timedOut ? "timeout" : (error as { code?: string })?.code ?? "error");
+    await logEvent(supabase, { intent: "error", latencyMs: Date.now() - started, errorCode: timedOut ? "timeout" : (code ?? "error") });
     return json(
       {
         error: timedOut
