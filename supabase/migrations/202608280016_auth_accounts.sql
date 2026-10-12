@@ -10,6 +10,7 @@
 --
 -- File, folder and sharing permissions are not touched.
 -- Idempotent: safe to re-run. Run after 202608280015_superapp_files_versioned.sql.
+-- Works with the (non-superuser) postgres role of the Supabase SQL editor.
 
 -- =============================================
 -- Profile mirror: normalised, never blocks auth
@@ -58,15 +59,34 @@ begin
 end;
 $$;
 
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user_profile();
+-- Triggers on auth.users are only created when missing, never dropped: on
+-- hosted Supabase the SQL editor's postgres role does not own auth.users, and
+-- DROP TRIGGER requires ownership ("must be owner of relation users").
+-- An existing on_auth_user_created trigger already runs the function
+-- replaced above.
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger
+    where tgrelid = 'auth.users'::regclass and tgname = 'on_auth_user_created'
+  ) then
+    create trigger on_auth_user_created
+      after insert on auth.users
+      for each row execute procedure public.handle_new_user_profile();
+  end if;
 
-drop trigger if exists on_auth_user_email_updated on auth.users;
-create trigger on_auth_user_email_updated
-  after update of email on auth.users
-  for each row execute procedure public.handle_user_email_change();
+  if not exists (
+    select 1 from pg_trigger
+    where tgrelid = 'auth.users'::regclass and tgname = 'on_auth_user_email_updated'
+  ) then
+    create trigger on_auth_user_email_updated
+      after update of email on auth.users
+      for each row execute procedure public.handle_user_email_change();
+  end if;
+exception when insufficient_privilege then
+  raise warning 'Could not create triggers on auth.users (%). Sign-in still works, but new or changed e-mails will not be copied to user_profiles until a role allowed to create triggers on auth.users runs this block.', sqlerrm;
+end;
+$$;
 
 -- One-time resync. Profiles created before this migration may hold a stale
 -- or differently-cased address; rows that would collide are left as they are.
@@ -218,3 +238,21 @@ $$;
 
 revoke execute on function public.current_user_has_password() from public, anon;
 grant execute on function public.current_user_has_password() to authenticated;
+
+-- =============================================
+-- Result summary (shown by the SQL editor): every column should be true.
+-- =============================================
+select
+  exists (
+    select 1 from pg_trigger
+    where tgrelid = 'auth.users'::regclass and tgname = 'on_auth_user_created'
+  ) as profile_sync_on_signup,
+  exists (
+    select 1 from pg_trigger
+    where tgrelid = 'auth.users'::regclass and tgname = 'on_auth_user_email_updated'
+  ) as profile_sync_on_email_change,
+  exists (
+    select 1 from pg_indexes
+    where schemaname = 'public' and indexname = 'user_profiles_email_lower_key'
+  ) as email_unique_case_insensitive,
+  to_regclass('public.auth_rate_limits') is not null as rate_limit_table;

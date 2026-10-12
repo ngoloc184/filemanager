@@ -85,6 +85,30 @@ Migration này **không xóa dữ liệu** và chạy lại an toàn:
 Supabase Auth đã đảm bảo một email chỉ có một tài khoản (unique index trên
 `auth.users.email`).
 
+Cách chạy: mở file trên GitHub, bấm **Raw**, sao chép **toàn bộ** nội dung (file
+kết thúc bằng câu `select ... as rate_limit_table;`), dán vào SQL Editor và bấm
+**Run**. Kết quả cuối cùng là một dòng gồm 4 cột, tất cả phải là `true`:
+
+| Cột | Ý nghĩa |
+|---|---|
+| `profile_sync_on_signup` | Trigger đồng bộ profile khi tạo tài khoản |
+| `profile_sync_on_email_change` | Trigger đồng bộ profile khi đổi email |
+| `email_unique_case_insensitive` | Ràng buộc email duy nhất không phân biệt hoa/thường |
+| `rate_limit_table` | Bảng chống brute-force |
+
+Xử lý sự cố:
+
+- `ERROR: must be owner of relation users`: bạn đang chạy bản migration cũ (có
+  `drop trigger ... on auth.users`). Role `postgres` của SQL Editor không sở hữu
+  `auth.users` nên không được xóa trigger trên bảng này. Hãy dùng bản hiện tại
+  của file: bản này chỉ tạo trigger khi còn thiếu và không bao giờ xóa trigger.
+- `unterminated dollar-quoted string`: nội dung dán vào bị thiếu phần cuối, hãy
+  sao chép lại toàn bộ file.
+- Cột `email_unique_case_insensitive` là `false`: có hai profile chỉ khác nhau
+  chữ hoa/thường (xem cảnh báo trong tab Messages). Kiểm tra bằng
+  `select lower(email), count(*) from public.user_profiles group by 1 having count(*) > 1;`
+  rồi xử lý thủ công và chạy lại migration.
+
 ---
 
 ## 3. Biến môi trường

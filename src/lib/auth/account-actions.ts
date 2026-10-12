@@ -60,7 +60,12 @@ export async function changePasswordAction(
   const currentPassword = text(formData, "currentPassword");
   const password = text(formData, "password");
   const confirmPassword = text(formData, "confirmPassword");
-  const { data: hasPassword } = await supabase.rpc("current_user_has_password");
+  const { data: passwordSet, error: passwordCheckError } = await supabase.rpc(
+    "current_user_has_password"
+  );
+  // If the check fails, assume a password exists so the current one is
+  // always required (fail closed).
+  const hasPassword = passwordCheckError ? true : Boolean(passwordSet);
 
   const fieldErrors: AuthFormState["fieldErrors"] = {};
   if (hasPassword && !currentPassword) fieldErrors.currentPassword = "Vui lòng nhập mật khẩu hiện tại.";
