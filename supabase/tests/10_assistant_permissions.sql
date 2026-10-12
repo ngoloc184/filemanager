@@ -194,6 +194,18 @@ select pg_temp.check(
   (select status from public.assistant_get_content('10000000-0000-0000-0000-0000000000a2')) = 'indexed',
   'owner can read the indexed content');
 
+select pg_temp.check(
+  (select content from public.assistant_get_document('10000000-0000-0000-0000-0000000000a2')) like 'Kế hoạch bí mật%',
+  'owner reads the full document for summaries');
+select pg_temp.login(:B);
+select pg_temp.check(
+  (select count(*) from public.assistant_get_document('10000000-0000-0000-0000-0000000000a2')) = 0,
+  'get_document reveals nothing without access');
+select pg_temp.login(:C);
+select pg_temp.check(
+  (select name from public.assistant_get_document('10000000-0000-0000-0000-0000000000a1')) = 'bao-cao-tai-chinh-thang-9.pdf',
+  'get_document works through an inherited folder share');
+
 -- users can never write the index (only the server indexer can)
 select pg_temp.login(:B);
 do $$
@@ -239,7 +251,8 @@ select pg_temp.login(:B);
 select pg_temp.check(
   (select count(*) from public.assistant_find_files(array['secret'])) = 0
   and (select count(*) from public.assistant_search_content('ke hoach bi mat')) = 0
-  and (select count(*) from public.assistant_get_content('10000000-0000-0000-0000-0000000000a2')) = 0,
+  and (select count(*) from public.assistant_get_content('10000000-0000-0000-0000-0000000000a2')) = 0
+  and (select count(*) from public.assistant_get_document('10000000-0000-0000-0000-0000000000a2')) = 0,
   'revoking the share removes access immediately');
 
 -- ----------------------------------------------- trash and stale versions
@@ -258,6 +271,10 @@ select pg_temp.check(
 select pg_temp.check(
   (select count(*) from public.assistant_search_content('authentication')) = 0,
   'index of an outdated version is not searchable');
+select pg_temp.check(
+  (select content = '' and indexed_version_id <> current_version_id
+   from public.assistant_get_document('10000000-0000-0000-0000-0000000000a1')),
+  'an outdated summary source is detected (old text not returned)');
 select pg_temp.login(:A);
 select pg_temp.check(
   (select count(*) from public.assistant_index_candidates(array['pdf'])

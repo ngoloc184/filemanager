@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, Loader2, RotateCcw, Upload, X } from "lucide-react";
+import { Download, Loader2, RotateCcw, Sparkles, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import FolderPicker from "@/components/files/folder-picker";
+import { openAiSummary } from "@/components/files/ai-summary-dialog";
 import {
   downloadVersion,
   getSignedUrl,
@@ -420,6 +421,18 @@ export function DetailsDialog({
         <DialogHeader>
           <DialogTitle>File details</DialogTitle>
           <DialogDescription className="truncate">{file.name}</DialogDescription>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-1 w-fit gap-1.5"
+            onClick={() => {
+              onOpenChange(false);
+              openAiSummary({ id: file.id, name: file.name, mimeType: file.mime_type });
+            }}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            AI tóm tắt
+          </Button>
         </DialogHeader>
         <div className="space-y-2">
           {rows.map(([label, value]) => (
@@ -665,10 +678,22 @@ export function PreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle className="truncate">{file.name}</DialogTitle>
+          <DialogTitle className="truncate pr-6">{file.name}</DialogTitle>
           <DialogDescription>
             {formatBytes(file.size)} • {mime}
           </DialogDescription>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-1 w-fit gap-1.5"
+            onClick={() => {
+              onOpenChange(false);
+              openAiSummary({ id: file.id, name: file.name, mimeType: file.mime_type });
+            }}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            AI tóm tắt
+          </Button>
         </DialogHeader>
         <div className="min-h-64 flex items-center justify-center bg-muted/40 rounded-lg overflow-hidden">
           {loadError && (

@@ -38,7 +38,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280016...`)
+   (`202608280001...` through `202608280017...`)
 4. Migrate existing batch data into the new file system (idempotent, safe to re-run):
 
    ```sql
@@ -171,7 +171,11 @@ curl -X PUT https://<domain>/api/superapp/versions/transfer \
 A permission-aware chatbox (bottom-right in the app, `Ctrl/⌘ + J`) that finds
 files by name, type, date, sharing and content, lists what you shared, shows
 statistics and summarizes documents locally, without any external AI. Run
-migration `202608280016_assistant_search.sql`. Setup, security model,
+migrations `202608280016_assistant_search.sql` and
+`202608280017_assistant_get_document.sql`. Every file menu (and the preview /
+details dialogs) also has **AI tóm tắt**: a structured Vietnamese summary
+(short / key points / detailed), copy, re-summarize and questions about the
+file. Setup, security model,
 optional local/cloud LLM and operations: [docs/ai-assistant.md](docs/ai-assistant.md).
 
 ## Project Structure
