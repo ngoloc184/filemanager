@@ -8,6 +8,7 @@ import { useTheme } from "next-themes";
 import {
   ArrowRight,
   CornerDownLeft,
+  FilePlus2,
   FolderPlus,
   Home,
   LogOut,
@@ -149,6 +150,9 @@ export function CommandPalette({ onSignOut }: { onSignOut: () => void }) {
                   </Item>
                   <Item value="new folder create" onSelect={() => filesCommand("new-folder")}>
                     <FolderPlus /> New folder
+                  </Item>
+                  <Item value="new text file notepad create txt" onSelect={() => filesCommand("new-text-file")}>
+                    <FilePlus2 /> New text file
                   </Item>
                 </Group>
 

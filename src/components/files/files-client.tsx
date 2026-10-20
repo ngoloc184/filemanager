@@ -12,12 +12,15 @@ import {
   Download,
   Eye,
   File,
+  FilePen,
+  FilePlus2,
   FolderOpen,
   FolderPlus,
   Grid3x3,
   Info,
   List,
   Copy,
+  MessageSquare,
   FolderInput,
   MoreHorizontal,
   Pencil,
@@ -74,6 +77,10 @@ import { openAiSummary } from "@/components/files/ai-summary-dialog";
 import { FileTile, fileKind } from "@/components/files/file-tile";
 import { FILES_COMMAND_EVENT, type FilesCommand } from "@/components/navigation";
 import ShareDialog from "@/components/files/share-dialog";
+import TextEditorDialog, { type TextEditorTarget } from "@/components/files/text-editor-dialog";
+import { isEditableTextFile } from "@/lib/text-files";
+import CommentsDialog, { type CommentsDialogTarget } from "@/components/files/comments-dialog";
+import { countComments } from "@/lib/services/comments";
 import {
   DeleteDialog,
   DetailsDialog,
@@ -110,6 +117,9 @@ export default function FilesClient({
   const [shareTarget, setShareTarget] = useState<RowTarget | null>(null);
   const [detailsFile, setDetailsFile] = useState<FileRow | null>(null);
   const [previewFile, setPreviewFile] = useState<FileRow | null>(null);
+  const [editorTarget, setEditorTarget] = useState<TextEditorTarget | null>(null);
+  const [commentsTarget, setCommentsTarget] = useState<CommentsDialogTarget | null>(null);
+  const [commentCounts, setCommentCounts] = useState<Map<string, number>>(new Map());
 
   const [tasks, setTasks] = useState<UploadTask[]>([]);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -162,6 +172,13 @@ export default function FilesClient({
       setFolders(folderList);
       setFiles(fileList);
       setAncestors(ancestorList);
+      // counts are a nice-to-have: load them after the listing, never block it
+      void countComments(
+        fileList.map((file) => file.id),
+        folderList.map((folder) => folder.id)
+      ).then((counts) => {
+        if (requestId === loadRequestId.current) setCommentCounts(counts);
+      });
     } catch (err) {
       if (requestId !== loadRequestId.current) return;
       setError(getErrorMessage(err));
@@ -198,6 +215,7 @@ export default function FilesClient({
       const command = (event as CustomEvent<FilesCommand>).detail;
       if (command === "upload") fileInputRef.current?.click();
       if (command === "new-folder") setNewFolderOpen(true);
+      if (command === "new-text-file") setEditorTarget({ mode: "create", folderId: currentFolderRef.current });
     };
     window.addEventListener(FILES_COMMAND_EVENT, onCommand);
     return () => window.removeEventListener(FILES_COMMAND_EVENT, onCommand);
@@ -209,6 +227,7 @@ export default function FilesClient({
     // one-shot intent from the command palette on another page
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (intent === "new-folder") setNewFolderOpen(true);
+    if (intent === "new-text-file") setEditorTarget({ mode: "create", folderId });
     if (intent === "upload") toast("Drop files anywhere, or press Upload to choose files");
     router.replace(folderId ? `/dashboard?folder=${folderId}` : "/dashboard");
   }, [intent, folderId, router]);
@@ -395,6 +414,42 @@ export default function FilesClient({
     }
   };
 
+  const openFolderComments = (folder: Folder) =>
+    setCommentsTarget({
+      kind: "folder",
+      id: folder.id,
+      name: folder.name,
+      isOwner: folder.owner_id === user.id,
+      description: folder.comment,
+    });
+
+  const openFileComments = (file: FileRow) =>
+    setCommentsTarget({
+      kind: "file",
+      id: file.id,
+      name: file.name,
+      isOwner: file.owner_id === user.id,
+    });
+
+  const commentBadge = (id: string, onOpen: () => void) => {
+    const count = commentCounts.get(id) ?? 0;
+    if (count === 0) return null;
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen();
+        }}
+        className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+        aria-label={`${count} comment${count === 1 ? "" : "s"}`}
+      >
+        <MessageSquare className="h-3.5 w-3.5" />
+        {count}
+      </button>
+    );
+  };
+
   const selectedCount = selectedFolders.size + selectedFiles.size;
 
   const clearSelection = () => {
@@ -499,6 +554,10 @@ export default function FilesClient({
             <FolderOpen className="h-4 w-4 mr-2" />
             Open
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openFolderComments(folder)}>
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Comments
+          </DropdownMenuItem>
           {isOwner && (
             <>
               <DropdownMenuItem
@@ -579,6 +638,10 @@ export default function FilesClient({
             <Info className="h-4 w-4 mr-2" />
             Details
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openFileComments(file)}>
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Comments
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() =>
               setCopyTarget(file)
@@ -614,6 +677,12 @@ export default function FilesClient({
                 <Share2 className="h-4 w-4 mr-2" />
                 Share
               </DropdownMenuItem>
+              {isEditableTextFile(file) && (
+                <DropdownMenuItem onClick={() => setEditorTarget({ mode: "edit", file })}>
+                  <FilePen className="h-4 w-4 mr-2" />
+                  Edit text
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onClick={() => {
                   versionTargetRef.current = file;
@@ -801,6 +870,14 @@ export default function FilesClient({
             </Button>
             <Button
               variant="outline"
+              onClick={() => setEditorTarget({ mode: "create", folderId })}
+              aria-label="New text file"
+            >
+              <FilePlus2 className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">New File</span>
+            </Button>
+            <Button
+              variant="outline"
               onClick={open}
               className="hidden md:inline-flex"
             >
@@ -905,6 +982,10 @@ export default function FilesClient({
                   <FolderPlus className="h-4 w-4 mr-2" />
                   New Folder
                 </Button>
+                <Button variant="outline" onClick={() => setEditorTarget({ mode: "create", folderId })}>
+                  <FilePlus2 className="h-4 w-4 mr-2" />
+                  New File
+                </Button>
                 <Button variant="brand" onClick={() => fileInputRef.current?.click()}>
                   <Upload className="h-4 w-4 mr-2" />
                   Upload files
@@ -942,11 +1023,12 @@ export default function FilesClient({
                 <FileTile kind="folder" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{folder.name}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground truncate">
                     Folder • {format(new Date(folder.created_at), "MMM d, yyyy")}
                     {folder.comment ? ` • ${folder.comment}` : ""}
                   </p>
                 </div>
+                {commentBadge(folder.id, () => openFolderComments(folder))}
                 {folder.owner_id !== user.id && (
                   <Badge variant="outline" className="shrink-0">
                     Shared
@@ -986,6 +1068,7 @@ export default function FilesClient({
                     {format(new Date(file.updated_at), "MMM d, yyyy")}
                   </p>
                 </div>
+                {commentBadge(file.id, () => openFileComments(file))}
                 {file.is_public && (
                   <Badge variant="secondary" className="shrink-0">
                     Public
@@ -1030,6 +1113,7 @@ export default function FilesClient({
                 <FileTile kind="folder" size="lg" className="transition-transform duration-300 group-hover/card:scale-110 group-hover/card:-rotate-3" />
                 <p className="text-sm font-medium truncate w-full">{folder.name}</p>
                 <p className="text-xs text-muted-foreground">Folder</p>
+                {commentBadge(folder.id, () => openFolderComments(folder))}
                 {!selectionMode && folderMenu(folder)}
               </div>
             ))}
@@ -1061,6 +1145,7 @@ export default function FilesClient({
                 <p className="text-xs text-muted-foreground">
                   {formatBytes(file.size)}
                 </p>
+                {commentBadge(file.id, () => openFileComments(file))}
                 {!selectionMode && fileMenu(file)}
               </div>
             ))}
@@ -1173,6 +1258,40 @@ export default function FilesClient({
             if (!open) setPreviewFile(null);
           }}
           file={previewFile}
+        />
+      )}
+      {commentsTarget && (
+        <CommentsDialog
+          key={`${commentsTarget.kind}-${commentsTarget.id}`}
+          target={commentsTarget}
+          currentUserId={user.id}
+          onOpenChange={(open) => {
+            if (!open) setCommentsTarget(null);
+          }}
+          onCountChange={(count) =>
+            setCommentCounts((prev) => new Map(prev).set(commentsTarget.id, count))
+          }
+          onDescriptionChange={(description) =>
+            setFolders((prev) =>
+              prev.map((folder) =>
+                folder.id === commentsTarget.id ? { ...folder, comment: description } : folder
+              )
+            )
+          }
+        />
+      )}
+      {editorTarget && (
+        <TextEditorDialog
+          key={editorTarget.mode === "edit" ? editorTarget.file.id : "create"}
+          target={editorTarget}
+          userId={user.id}
+          onOpenChange={(open) => {
+            if (!open) setEditorTarget(null);
+          }}
+          onSaved={() => {
+            const dest = editorTarget.mode === "create" ? editorTarget.folderId : editorTarget.file.folder_id;
+            reloadIfShowing(dest);
+          }}
         />
       )}
       <UploadPanel

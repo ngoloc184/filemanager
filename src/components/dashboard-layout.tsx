@@ -24,8 +24,8 @@ interface DashboardLayoutProps {
 }
 
 const SECTIONS: { title: string; items: readonly NavItem[] }[] = [
-  { title: "Workspace", items: NAV_ITEMS.slice(0, 4) },
-  { title: "Library", items: NAV_ITEMS.slice(4) },
+  { title: "Workspace", items: NAV_ITEMS.slice(0, 5) },
+  { title: "Library", items: NAV_ITEMS.slice(5) },
 ];
 
 function ShortcutHint({ className }: { className?: string }) {

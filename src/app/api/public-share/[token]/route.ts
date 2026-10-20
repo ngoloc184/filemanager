@@ -76,11 +76,17 @@ export async function GET(
 
     // Record usage without delaying the download.
     after(async () => {
-      const { error } = await supabase
+      // atomic view_count + 1 (migration 202608280021); older databases
+      // without the function still get last_used_at
+      const { error } = await supabase.rpc("record_share_link_view", {
+        p_link_id: link.id,
+      });
+      if (!error) return;
+      const { error: fallbackError } = await supabase
         .from("share_links")
         .update({ last_used_at: new Date().toISOString() })
         .eq("id", link.id);
-      if (error) console.error("Failed to record share link usage", error);
+      if (fallbackError) console.error("Failed to record share link usage", fallbackError);
     });
 
     const response = NextResponse.redirect(signedUrl.signedUrl);

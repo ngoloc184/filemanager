@@ -1,6 +1,7 @@
 import {
   Clock,
   History,
+  Link2,
   Search,
   Share2,
   Trash2,
@@ -17,6 +18,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/recent", label: "Recent", icon: Clock },
   { href: "/search", label: "Search", icon: Search },
   { href: "/shared", label: "Shared with me", icon: Share2 },
+  { href: "/links", label: "Saved links", icon: Link2 },
   { href: "/trash", label: "Trash", icon: Trash2 },
   { href: "/activity", label: "Activity", icon: History },
   { href: "/contacts", label: "Related users", icon: UsersRound },
@@ -28,7 +30,7 @@ export function isActive(pathname: string, href: string): boolean {
 }
 
 /** Commands the palette can send to the files view. */
-export type FilesCommand = "upload" | "new-folder";
+export type FilesCommand = "upload" | "new-folder" | "new-text-file";
 export const FILES_COMMAND_EVENT = "fm:files-command";
 
 export function sendFilesCommand(command: FilesCommand): void {

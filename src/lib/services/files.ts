@@ -5,6 +5,7 @@ import {
   UPLOADS_BUCKET,
   buildStoragePath,
 } from "@/lib/storage";
+import { decodeTextFile } from "@/lib/text-files";
 import type { FileRow, FileVersion } from "@/lib/types/database";
 
 export { UPLOADS_BUCKET, sanitizeStorageName } from "@/lib/storage";
@@ -108,6 +109,22 @@ export async function getSignedUrl(
     .createSignedUrl(version.storage_path, ttl);
   if (error) throw error;
   return data.signedUrl;
+}
+
+/** Reads the current version of a (small) UTF-8 text file for editing. */
+export async function readTextFile(
+  file: DownloadableFile
+): Promise<{ text: string; bom: boolean }> {
+  const url = await getSignedUrl(file, SIGNED_URL_TTL_DOWNLOAD);
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Could not read the file (HTTP ${response.status})`);
+  const decoded = decodeTextFile(new Uint8Array(await response.arrayBuffer()));
+  if (!decoded) {
+    throw new Error(
+      "This file is not UTF-8 text, so it cannot be edited here without damaging it. Download it to edit it instead."
+    );
+  }
+  return decoded;
 }
 
 function triggerBrowserDownload(url: string, fileName: string): void {

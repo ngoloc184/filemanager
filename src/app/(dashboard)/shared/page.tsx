@@ -1,5 +1,7 @@
 import SharedClient from "@/components/files/shared-client";
+import { requireUser } from "@/lib/auth";
 
-export default function SharedPage() {
-  return <SharedClient />;
+export default async function SharedPage() {
+  const user = await requireUser();
+  return <SharedClient userId={user.id} />;
 }

@@ -6,6 +6,7 @@ import {
   UPLOADS_BUCKET,
   buildStoragePath,
 } from "@/lib/storage";
+import { encodeTextFile, textMimeType } from "@/lib/text-files";
 import { getErrorMessage, type FileRow } from "@/lib/types/database";
 
 /**
@@ -187,4 +188,36 @@ export async function uploadNewVersion(
     await removeOrphanObject(storagePath);
     throw err;
   }
+}
+
+/** Creates a text file from the built-in editor (no upload from disk). */
+export async function createTextFile(
+  userId: string,
+  folderId: string | null,
+  name: string,
+  text: string
+): Promise<FileRow> {
+  const file = new File([text], name, { type: textMimeType(name) });
+  const [task] = createUploadTasks([file], folderId);
+  let failure: string | undefined;
+  try {
+    return await uploadOne(userId, task, (status, error) => {
+      if (status === "failed") failure = error;
+    });
+  } catch (err) {
+    throw new Error(failure ?? getErrorMessage(err));
+  }
+}
+
+/** Saves edited text as a new version, so earlier versions stay restorable. */
+export async function saveTextFileVersion(
+  userId: string,
+  target: Pick<FileRow, "id" | "name" | "mime_type">,
+  text: string,
+  bom = false
+): Promise<void> {
+  const file = new File([encodeTextFile(text, bom)], target.name, {
+    type: textMimeType(target.name, target.mime_type),
+  });
+  await uploadNewVersion(userId, target.id, file);
 }

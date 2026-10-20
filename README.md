@@ -6,7 +6,9 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 
 - **Upload Management**: Create upload batches with multiple files
 - **Drag & Drop**: Upload files by dragging them anywhere on the page
-- **Batch Comments**: Add and edit comments for each upload batch
+- **Comments**: Multi-line comment threads on every file and folder (anyone who can view an item can comment; authors edit their own, owners can remove any)
+- **Text editor**: Create a `.txt` file directly in a folder, or edit small text files (each save becomes a new version)
+- **Saved links**: A private list of useful URLs with a title (e.g. “Daily progress update”)
 - **File Management**: Download, view, and delete individual files
 - **Search**: Search through batches and files
 - **Authentication**: Secure login with email/password
@@ -38,7 +40,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280018...`)
+   (`202608280001...` through `202608280022...`)
 4. Migrate existing batch data into the new file system (idempotent, safe to re-run):
 
    ```sql
@@ -191,7 +193,7 @@ src/
 ├── app/
 │   ├── (dashboard)/       # Signed-in area sharing one layout + auth check
 │   │   ├── dashboard/     # My Files (folders, uploads, versions)
-│   │   ├── recent/  search/  shared/  trash/  activity/  contacts/
+│   │   ├── recent/  search/  shared/  links/  trash/  activity/  contacts/
 │   ├── api/public-share/  # Public share-link download + info endpoints
 │   ├── share/[token]/     # Public share-link landing page
 │   ├── login/  register/  setup/

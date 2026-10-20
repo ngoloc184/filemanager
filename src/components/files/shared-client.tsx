@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Download, Folder as FolderIcon } from "lucide-react";
+import { Download, Folder as FolderIcon, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,6 +16,7 @@ import { getErrorMessage } from "@/lib/types/database";
 import { FileTile, fileKind } from "@/components/files/file-tile";
 import { cn, ENTER_ANIMATION, formatBytes, staggerDelay } from "@/lib/utils";
 import { PreviewDialog } from "@/components/files/file-dialogs";
+import CommentsDialog, { type CommentsDialogTarget } from "@/components/files/comments-dialog";
 
 const roleBadge: Record<string, "default" | "secondary" | "outline"> = {
   viewer: "secondary",
@@ -23,11 +24,12 @@ const roleBadge: Record<string, "default" | "secondary" | "outline"> = {
   admin: "default",
 };
 
-export default function SharedClient() {
+export default function SharedClient({ userId }: { userId: string }) {
   const router = useRouter();
   const [items, setItems] = useState<SharedItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<SharedItem | null>(null);
+  const [commentsTarget, setCommentsTarget] = useState<CommentsDialogTarget | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -122,6 +124,18 @@ export default function SharedClient() {
               <Badge variant={roleBadge[item.role] ?? "outline"} className="shrink-0 capitalize">
                 {item.role}
               </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCommentsTarget({ kind: item.item_type, id: item.id, name: item.name, isOwner: false });
+                }}
+                aria-label={`Comments on ${item.name}`}
+              >
+                <MessageSquare className="h-4 w-4" />
+              </Button>
               {item.item_type === "file" && (
                 <Button
                   variant="ghost"
@@ -141,6 +155,16 @@ export default function SharedClient() {
         </div>
       )}
 
+      {commentsTarget && (
+        <CommentsDialog
+          key={`${commentsTarget.kind}-${commentsTarget.id}`}
+          target={commentsTarget}
+          currentUserId={userId}
+          onOpenChange={(open) => {
+            if (!open) setCommentsTarget(null);
+          }}
+        />
+      )}
       {preview && (
         <PreviewDialog
           open

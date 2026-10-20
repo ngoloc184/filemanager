@@ -34,6 +34,10 @@ function actionLabel(action: string): string {
       return "uploaded a new version of";
     case "file.version_restored":
       return "restored a version of";
+    case "file.commented":
+      return "commented on file";
+    case "folder.commented":
+      return "commented on folder";
     case "folder.created":
       return "created folder";
     case "folder.deleted":

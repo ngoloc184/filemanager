@@ -85,12 +85,12 @@ export function NewFolderDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="folder-comment">Comment (optional)</Label>
+            <Label htmlFor="folder-comment">Description (optional)</Label>
             <Textarea
               id="folder-comment"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              rows={2}
+              rows={3}
               placeholder="What is this folder for?"
             />
           </div>
@@ -676,7 +676,7 @@ export function PreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="truncate pr-6">{file.name}</DialogTitle>
           <DialogDescription>

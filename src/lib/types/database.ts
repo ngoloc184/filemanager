@@ -50,6 +50,15 @@ export type FolderAncestor = {
   parent_id: string | null;
 };
 
+export type SavedLink = {
+  id: string;
+  owner_id: string;
+  title: string;
+  url: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export function getErrorMessage(err: unknown): string {
   if (typeof err === "object" && err !== null && "message" in err) {
     return String((err as { message: unknown }).message);
