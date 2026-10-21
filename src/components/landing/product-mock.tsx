@@ -100,7 +100,7 @@ export function ProductMock() {
           {/* Sidebar */}
           <div className="hidden w-48 shrink-0 border-r p-3 md:block">
             <div className="mb-4 flex items-center gap-2 px-2">
-              <LogoMark className="h-6 w-6 rounded-lg [&_svg]:h-3 [&_svg]:w-3" />
+              <LogoMark small className="h-6 w-6 [&_svg]:h-3.5 [&_svg]:w-3.5" />
               <span className="text-sm font-semibold">File Manager</span>
             </div>
             {NAV.map(({ icon: Icon, label, active }) => (
