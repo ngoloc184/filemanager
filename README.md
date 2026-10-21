@@ -53,14 +53,21 @@ A modern web application for managing file uploads, built with Next.js, Supabase
    - Set it as **Private** (not public)
    - File size limit: 50 MB (or your preference)
 
-### 3. Create an Admin Account
+### 3. E-mail codes for sign-up and password reset
+
+Sign-up and “Forgot password” use 6-digit codes sent by e-mail. Configure your
+own SMTP, the two e-mail templates in `supabase/email-templates/` and the Site
+URL — see [docs/auth-email.md](docs/auth-email.md). Without custom SMTP,
+Supabase only e-mails members of your Supabase team.
+
+### 4. Create an Admin Account
 
 1. In Supabase dashboard, go to **Authentication > Users**
 2. Click **Add User** > **Create new user**
 3. Enter an email and password
 4. Or use the `/setup` page in the app to create one
 
-### 4. Configure Environment Variables
+### 5. Configure Environment Variables
 
 ```bash
 cp .env.example .env.local
@@ -77,7 +84,7 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 `SUPABASE_SERVICE_ROLE_KEY` is only read on the server by the public share-link
 endpoints (`/api/public-share/*`). Never expose it with a `NEXT_PUBLIC_` prefix.
 
-### 5. Run the Development Server
+### 6. Run the Development Server
 
 ```bash
 npm install

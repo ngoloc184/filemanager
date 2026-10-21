@@ -1,0 +1,12 @@
+<!-- Supabase Dashboard → Authentication → Emails → "Confirm sign up".
+     Subject: Your File Manager verification code: {{ .Token }} -->
+<div style="font-family:Inter,Segoe UI,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#111827">
+  <h2 style="margin:0 0 8px">Confirm your e-mail</h2>
+  <p style="margin:0 0 16px;color:#4b5563">Enter this code on the sign-up page to finish creating your account:</p>
+  <p style="margin:0 0 16px;font-size:32px;font-weight:700;letter-spacing:8px;font-family:Menlo,Consolas,monospace">{{ .Token }}</p>
+  <p style="margin:0 0 16px;color:#6b7280;font-size:13px">The code expires soon. If you did not sign up, ignore this e-mail.</p>
+  <p style="margin:0;color:#6b7280;font-size:13px">
+    Or confirm with this link:
+    <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/dashboard">confirm my e-mail</a>
+  </p>
+</div>

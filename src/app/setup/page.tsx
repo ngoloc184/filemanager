@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,12 +15,13 @@ export default function SetupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    const { error } = await createClient().auth.signUp({
+    const { data, error } = await createClient().auth.signUp({
       email,
       password,
       options: {
@@ -35,12 +37,16 @@ export default function SetupPage() {
       return;
     }
 
-    toast.success(
-      "Admin account created! Check your email for verification if email confirmation is enabled."
-    );
-    setEmail("");
-    setPassword("");
-    setLoading(false);
+    if (data.session) {
+      // e-mail confirmation is off on the server: already signed in
+      toast.success("Admin account created!");
+      router.push("/dashboard");
+      router.refresh();
+      return;
+    }
+    toast.success("Admin account created! Enter the code we e-mailed to confirm it.");
+    // confirm the address with the e-mailed code
+    router.push(`/register?verify=${encodeURIComponent(email.trim())}`);
   };
 
   return (
