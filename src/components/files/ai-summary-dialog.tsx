@@ -266,7 +266,7 @@ function AiSummaryDialog({ file, onClose }: { file: SummaryTarget; onClose: () =
                 <Sparkles className="h-4 w-4 shrink-0 text-primary" />
                 AI tóm tắt
               </DialogTitle>
-              <DialogDescription className="truncate" title={file.name}>
+              <DialogDescription className="line-clamp-2" title={file.name}>
                 {file.name}
                 {meta ? ` · ${formatBytes(meta.size)}${meta.folderName ? ` · ${meta.folderName}` : ""}` : ""}
               </DialogDescription>

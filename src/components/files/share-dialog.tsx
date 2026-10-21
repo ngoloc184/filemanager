@@ -201,10 +201,12 @@ export default function ShareDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Share {kind}</DialogTitle>
-          <DialogDescription className="truncate">{resourceName}</DialogDescription>
+          <DialogDescription className="line-clamp-3" title={resourceName}>
+            {resourceName}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
@@ -254,7 +256,7 @@ export default function ShareDialog({
                     key={share.share_id}
                     className="flex items-center gap-2 rounded-md border px-2 py-1.5"
                   >
-                    <span className="flex-1 text-sm truncate">{share.grantee_email}</span>
+                    <span className="min-w-0 flex-1 text-sm truncate" title={share.grantee_email}>{share.grantee_email}</span>
                     <Select
                       value={share.role}
                       onValueChange={(v) => v && void changeRole(share, v as ShareRoleInput)}

@@ -117,9 +117,9 @@ export default function TextEditorDialog({
         if (!open) requestClose();
       }}
     >
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle className="truncate pr-6">
+          <DialogTitle className="line-clamp-2">
             {editing ? `Edit ${editing.name}` : "New text file"}
           </DialogTitle>
           <DialogDescription>

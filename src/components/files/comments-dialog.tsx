@@ -194,10 +194,12 @@ export default function CommentsDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[88vh] flex-col sm:max-w-lg">
+      <DialogContent className="flex max-h-[88vh] flex-col sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Comments</DialogTitle>
-          <DialogDescription className="truncate">{target.name}</DialogDescription>
+          <DialogDescription className="line-clamp-2" title={target.name}>
+            {target.name}
+          </DialogDescription>
         </DialogHeader>
 
         {showDescription && (

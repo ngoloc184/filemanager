@@ -33,7 +33,10 @@ import {
   type FileVersion,
 } from "@/lib/types/database";
 import { formatBytes } from "@/lib/utils";
+import { decodeTextFile } from "@/lib/text-files";
 import { format } from "date-fns";
+
+const TEXT_PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
 
 export function NewFolderDialog({
   open,
@@ -251,9 +254,9 @@ export function MoveCopyDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="line-clamp-3" title={itemName}>
             {mode === "move" ? "Move" : "Copy"} &quot;{itemName}&quot;
           </DialogTitle>
           <DialogDescription>Choose a destination folder.</DialogDescription>
@@ -417,10 +420,12 @@ export function DetailsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>File details</DialogTitle>
-          <DialogDescription className="truncate">{file.name}</DialogDescription>
+          <DialogDescription className="line-clamp-3" title={file.name}>
+            {file.name}
+          </DialogDescription>
           <Button
             variant="outline"
             size="sm"
@@ -438,7 +443,9 @@ export function DetailsDialog({
           {rows.map(([label, value]) => (
             <div key={label} className="flex justify-between gap-4 text-sm">
               <span className="text-muted-foreground shrink-0">{label}</span>
-              <span className="text-right truncate font-mono text-xs leading-5">{value}</span>
+              <span className="min-w-0 text-right font-mono text-xs leading-5 [overflow-wrap:anywhere]">
+                {value}
+              </span>
             </div>
           ))}
           <div className="flex justify-between gap-4 text-sm items-center">
@@ -640,20 +647,28 @@ export function PreviewDialog({
       .then(async (signedUrl) => {
         if (cancelled) return;
         setUrl(signedUrl);
-        const isText =
-          file.mime_type.startsWith("text/") ||
-          ["application/json", "application/xml", "application/x-yaml"].includes(
-            file.mime_type
-          );
-        if (isText && file.size <= 2 * 1024 * 1024) {
-          try {
-            const response = await fetch(signedUrl);
-            if (!response.ok) return;
-            const text = await response.text();
-            if (!cancelled) setTextContent(text);
-          } catch {
-            // preview falls back to download-only
-          }
+        const mime = file.mime_type;
+        const hasMediaPreview =
+          mime.startsWith("image/") ||
+          mime.startsWith("video/") ||
+          mime.startsWith("audio/") ||
+          mime === "application/pdf";
+        if (hasMediaPreview || file.size > TEXT_PREVIEW_MAX_BYTES) return;
+        // Text is shown even when the browser uploaded it with a generic type
+        // (e.g. scripts or .properties files as application/octet-stream):
+        // the bytes decide, and binary files fall back to download-only.
+        try {
+          const response = await fetch(signedUrl);
+          if (!response.ok) return;
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          const decoded = decodeTextFile(bytes);
+          const declaredText =
+            mime.startsWith("text/") ||
+            ["application/json", "application/xml", "application/x-yaml"].includes(mime);
+          const text = decoded?.text ?? (declaredText ? new TextDecoder().decode(bytes) : null);
+          if (!cancelled && text !== null) setTextContent(text);
+        } catch {
+          // preview falls back to download-only
         }
       })
       .catch((err) => {
@@ -676,9 +691,11 @@ export function PreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-5xl">
         <DialogHeader>
-          <DialogTitle className="truncate pr-6">{file.name}</DialogTitle>
+          <DialogTitle className="line-clamp-3" title={file.name}>
+            {file.name}
+          </DialogTitle>
           <DialogDescription>
             {formatBytes(file.size)} • {mime}
           </DialogDescription>
@@ -695,7 +712,7 @@ export function PreviewDialog({
             AI tóm tắt
           </Button>
         </DialogHeader>
-        <div className="min-h-64 flex items-center justify-center bg-muted/40 rounded-lg overflow-hidden">
+        <div className="min-h-64 max-h-[72vh] flex items-center justify-center bg-muted/40 rounded-lg overflow-hidden">
           {loadError && (
             <p className="text-sm text-destructive p-8 text-center">{loadError}</p>
           )}
@@ -709,19 +726,19 @@ export function PreviewDialog({
           )}
           {url !== null && mime.startsWith("image/") && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={url} alt={file.name} className="max-h-[60vh] object-contain" />
+            <img src={url} alt={file.name} className="max-h-[70vh] max-w-full object-contain" />
           )}
           {url !== null && mime === "application/pdf" && (
-            <iframe src={url} title={file.name} className="w-full h-[60vh]" />
+            <iframe src={url} title={file.name} className="w-full h-[70vh]" />
           )}
           {url !== null && mime.startsWith("video/") && (
-            <video src={url} controls className="max-h-[60vh] w-full" />
+            <video src={url} controls className="max-h-[70vh] w-full" />
           )}
           {url !== null && mime.startsWith("audio/") && (
             <audio src={url} controls className="w-full p-8" />
           )}
           {textContent !== null && (
-            <pre className="w-full max-h-[60vh] overflow-auto p-4 text-xs whitespace-pre-wrap">
+            <pre className="w-full max-h-[70vh] self-stretch overflow-auto p-4 text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
               {textContent}
             </pre>
           )}
