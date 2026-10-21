@@ -9,6 +9,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 - **Comments**: Multi-line comment threads on every file and folder (anyone who can view an item can comment; authors edit their own, owners can remove any)
 - **Text editor**: Create a `.txt` file directly in a folder, or edit small text files (each save becomes a new version)
 - **Saved links**: A private list of useful URLs with a title (e.g. “Daily progress update”)
+- **AI Agent**: Talk to your files in the chat (“Thêm file Hợp đồng.docx vào thư mục Kế toán”, “Xem thùng rác”, “Lưu link …”); asks for missing details, confirms every change, and learns new phrasings from all users — no LLM required ([docs/ai-agent.md](docs/ai-agent.md))
 - **File Management**: Download, view, and delete individual files
 - **Search**: Search through batches and files
 - **Authentication**: Secure login with email/password
@@ -40,7 +41,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280022...`)
+   (`202608280001...` through `202608280023...`)
 4. Migrate existing batch data into the new file system (idempotent, safe to re-run):
 
    ```sql
@@ -185,9 +186,18 @@ Run migrations `202608280016_assistant_search.sql`,
 `npm run eval:assistant`. Architecture, security model, configuration,
 feedback/tuning workflow and rollback: [docs/ai-assistant.md](docs/ai-assistant.md).
 
+## AI Agent
+
+The chat runs through an agent (`src/lib/agent`) built on the reusable
+workspace package [`packages/agent-core`](packages/agent-core/README.md):
+file and folder operations with confirmation, and shared self-learning
+(migration `202608280023_agent_lessons.sql`). Details, examples and lesson
+administration: [docs/ai-agent.md](docs/ai-agent.md).
+
 ## Project Structure
 
 ```
+packages/agent-core/       # Reusable agent (npm workspace, no framework/DB/LLM)
 proxy.ts                   # Session refresh + auth redirect (Next.js proxy)
 src/
 ├── app/
@@ -205,6 +215,7 @@ src/
 │   ├── auth.ts            # Cached server-side user lookup / requireUser()
 │   ├── public-share.ts    # Server-only share-link validation
 │   ├── storage.ts         # Bucket name + storage path helpers
+│   ├── agent/             # File-manager tools + adapter for packages/agent-core
 │   ├── services/          # Client-side data access (Supabase RPC/Storage)
 │   ├── supabase/          # Browser, server, proxy and admin clients
 │   └── types/

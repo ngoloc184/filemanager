@@ -12,6 +12,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // workspace package shipped as TypeScript source (packages/agent-core)
+  transpilePackages: ["@ai-pro/agent-core"],
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

@@ -25,7 +25,8 @@ export type ActionSpec =
   | { kind: "create_export"; format: ExportFormat; title: string; source: ExportSource };
 
 export type PendingAction = {
-  kind: ActionSpec["kind"];
+  /** an assistant action kind, or "agent:<tool>" for agent tools */
+  kind: ActionSpec["kind"] | `agent:${string}`;
   title: string;
   /** exact scope shown before confirmation */
   summary: string;

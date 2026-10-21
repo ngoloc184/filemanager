@@ -4,7 +4,7 @@
 // comparison table, action confirmation, memory proposal, reasoning steps
 // and feedback.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -14,15 +14,20 @@ import {
   ChevronDown,
   ExternalLink,
   FileWarning,
+  Link2,
   Loader2,
   Quote,
   ShieldAlert,
   ThumbsDown,
   ThumbsUp,
+  Upload,
   Wand2,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FileTile, fileKind } from "@/components/files/file-tile";
+import { displayUrl } from "@/lib/saved-links";
+import { createUploadTasks, uploadOne } from "@/lib/services/uploads";
 import type { AssistantAnswer, AssistantReply, AssistantStep } from "@/lib/assistant/types";
 import type { Comparison } from "@/lib/assistant/compare";
 import type { ActionResult, PendingAction } from "@/lib/assistant/actions";
@@ -306,7 +311,18 @@ const REASONS: { value: string; label: string }[] = [
   { value: "other", label: "Khác" },
 ];
 
-export function FeedbackBar({ replyId, question, citedFiles }: { replyId: string; question: string; citedFiles: string[] }) {
+export function FeedbackBar({
+  replyId,
+  question,
+  citedFiles,
+  lessons,
+}: {
+  replyId: string;
+  question: string;
+  citedFiles: string[];
+  /** agent lessons used for this answer: 👍 confirms them, 👎 rejects them */
+  lessons?: string[];
+}) {
   const [rating, setRating] = useState<1 | -1 | null>(null);
   const [reason, setReason] = useState<string | null>(null);
   const [correction, setCorrection] = useState("");
@@ -326,6 +342,7 @@ export function FeedbackBar({ replyId, question, citedFiles }: { replyId: string
         correction: withDetails ? correction : null,
         question,
         citedFiles,
+        lessons,
       }),
     }).catch(() => null);
     const data = (await response?.json().catch(() => ({}))) as { error?: string } | undefined;
@@ -405,6 +422,138 @@ export function FeedbackBar({ replyId, question, citedFiles }: { replyId: string
           </button>
         </motion.div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- agent
+
+/** Folders, saved links and trash items listed by the agent. */
+export function AgentListsView({ reply }: { reply: Pick<AssistantReply, "folders" | "links" | "trash"> }) {
+  return (
+    <>
+      {reply.folders && reply.folders.length > 0 && (
+        <div className="space-y-1.5">
+          {reply.folders.map((f) => (
+            <Link
+              key={f.id}
+              href={f.openUrl}
+              className="flex items-center gap-2.5 rounded-xl border bg-background/70 px-3 py-2 text-sm transition-colors hover:border-primary/30"
+            >
+              <FileTile kind="folder" size="sm" />
+              <span className="min-w-0 flex-1 truncate font-medium">{f.name}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+      {reply.trash && reply.trash.length > 0 && (
+        <div className="space-y-1.5">
+          {reply.trash.map((f) => (
+            <Link
+              key={f.id}
+              href="/trash"
+              className="flex items-center gap-2.5 rounded-xl border bg-background/70 px-3 py-2 text-sm transition-colors hover:border-primary/30"
+            >
+              <FileTile kind={fileKind(null, f.name)} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{f.name}</p>
+                <p className="text-[11px] text-muted-foreground">Đã xóa {new Date(f.deletedAt).toLocaleDateString("vi-VN")}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+      {reply.links && reply.links.length > 0 && (
+        <div className="space-y-1.5">
+          {reply.links.map((l) => (
+            <a
+              key={l.id}
+              href={l.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2.5 rounded-xl border bg-background/70 px-3 py-2 text-sm transition-colors hover:border-primary/30"
+            >
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary ring-1 ring-inset ring-primary/20">
+                <Link2 className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{l.title}</p>
+                <p className="truncate text-[11px] text-muted-foreground">{displayUrl(l.url)}</p>
+              </div>
+              <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </a>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+type UploadState = { status: "idle" } | { status: "running"; done: number; total: number } | { status: "done"; ok: number; failed: number };
+
+/** "Tải file lên thư mục X": opens the file picker and uploads into that folder. */
+export function UploadCard({ upload, userId }: { upload: NonNullable<AssistantReply["upload"]>; userId: string }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [state, setState] = useState<UploadState>({ status: "idle" });
+
+  const start = async (files: File[]) => {
+    if (!files.length) return;
+    const tasks = createUploadTasks(files, upload.folderId);
+    let ok = 0;
+    let failed = 0;
+    setState({ status: "running", done: 0, total: tasks.length });
+    for (const task of tasks) {
+      try {
+        await uploadOne(userId, task, () => {});
+        ok++;
+      } catch {
+        failed++;
+      }
+      setState({ status: "running", done: ok + failed, total: tasks.length });
+    }
+    setState({ status: "done", ok, failed });
+  };
+
+  return (
+    <div className="rounded-2xl border border-primary/25 bg-background/80 p-3 shadow-sm">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-primary">Tải lên · {upload.folderName}</p>
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          e.target.value = "";
+          void start(files);
+        }}
+      />
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {state.status === "running" ? (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Đang tải {state.done}/{state.total}…
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+          >
+            <Upload className="h-3 w-3" />
+            {state.status === "done" ? "Chọn thêm file" : "Chọn file để tải lên"}
+          </button>
+        )}
+        {state.status === "done" && (
+          <p className={cn("flex items-center gap-1.5 text-xs", state.failed ? "text-destructive" : "text-success")}>
+            {state.failed ? <AlertTriangle className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+            Đã tải {state.ok} file{state.failed ? `, ${state.failed} file lỗi` : ""}.
+            <Link href={upload.folderId ? `/dashboard?folder=${upload.folderId}` : "/dashboard"} className="ml-1 font-medium text-primary hover:underline">
+              Mở
+            </Link>
+          </p>
+        )}
+      </div>
     </div>
   );
 }

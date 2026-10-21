@@ -38,6 +38,8 @@ export async function POST(request: Request) {
     correction?: unknown;
     question?: unknown;
     citedFiles?: unknown;
+    /** lessons the agent used for this answer (👍 confirms, 👎 rejects them) */
+    lessons?: unknown;
   };
   if (typeof body.replyId !== "string" || !UUID.test(body.replyId) || (body.rating !== 1 && body.rating !== -1)) {
     return json({ error: "Phản hồi không hợp lệ." }, 400);
@@ -51,13 +53,21 @@ export async function POST(request: Request) {
   const terms = typeof body.question === "string" ? analyzeQuestion(body.question.slice(0, 500)).terms.slice(0, 12) : [];
   const cited = Array.isArray(body.citedFiles) ? body.citedFiles.filter((x): x is string => typeof x === "string" && UUID.test(x)).slice(0, 10) : [];
 
+  const lessons = Array.isArray(body.lessons) ? body.lessons.filter((x): x is string => typeof x === "string" && UUID.test(x)).slice(0, 10) : [];
+  // votes count only once the reply is known to be the caller's own (RLS on
+  // assistant_feedback); best effort: learning must never block feedback
+  const voteLessons = async () => {
+    if (lessons.length) await supabase.rpc("agent_vote", { p_ids: lessons, p_vote: body.rating }).then(() => undefined, () => undefined);
+  };
+
   const row = { rating: body.rating, reason, correction: correction || null };
   const insert = await supabase
     .from("assistant_feedback")
     .insert({ event_id: body.replyId, ...row, query_terms: terms, cited_files: cited });
   if (insert.error?.code === "23505") {
-    const update = await supabase.from("assistant_feedback").update(row).eq("event_id", body.replyId);
+    const update = await supabase.from("assistant_feedback").update(row).eq("event_id", body.replyId).select("event_id");
     if (update.error) return json({ error: "Không lưu được phản hồi." }, 500);
+    if ((update.data ?? []).length) await voteLessons();
     return json({ ok: true, updated: true });
   }
   if (insert.error) {
@@ -68,5 +78,6 @@ export async function POST(request: Request) {
     // RLS: not the user's own answer, or unknown id
     return json({ error: "Không lưu được phản hồi." }, code === "42501" ? 403 : 400);
   }
+  await voteLessons();
   return json({ ok: true });
 }

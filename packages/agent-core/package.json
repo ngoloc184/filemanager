@@ -1,0 +1,21 @@
+{
+  "name": "@ai-pro/agent-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Framework-free conversational agent: template-based understanding, slot filling, confirmations, multi-step plans and shared self-learning. No LLM required.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test \"src/**/*.test.ts\""
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
+  "license": "MIT"
+}

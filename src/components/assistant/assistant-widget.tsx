@@ -24,7 +24,7 @@ import { FileTile, fileKind } from "@/components/files/file-tile";
 import { onAiSummaryVisibility, openAiSummary } from "@/components/files/ai-summary-dialog";
 import { cn, formatBytes } from "@/lib/utils";
 import type { AssistantFile, AssistantReply } from "@/lib/assistant/types";
-import { ActionCard, AnswerView, ComparisonView, FeedbackBar, MemoryProposalCard, StepsView } from "./assistant-parts";
+import { ActionCard, AgentListsView, AnswerView, ComparisonView, FeedbackBar, MemoryProposalCard, StepsView, UploadCard } from "./assistant-parts";
 import { MemoryPanel } from "./memory-panel";
 
 type Message =
@@ -152,6 +152,7 @@ function FileCard({
 function ReplyView({
   reply,
   question,
+  userId,
   onAsk,
   onChoose,
   onMore,
@@ -159,6 +160,7 @@ function ReplyView({
   indexing,
 }: {
   reply: AssistantReply;
+  userId: string;
   question: string;
   onAsk: (message: string, contextFileId?: string | null) => void;
   onChoose: (fileId: string, label: string) => void;
@@ -173,6 +175,8 @@ function ReplyView({
       {reply.answer && reply.answer.citations.length > 0 && <AnswerView answer={reply.answer} />}
       {reply.comparison && <ComparisonView comparison={reply.comparison} />}
       {reply.action && <ActionCard action={reply.action} />}
+      {reply.upload && <UploadCard upload={reply.upload} userId={userId} />}
+      <AgentListsView reply={reply} />
       {reply.memoryProposal && <MemoryProposalCard proposal={reply.memoryProposal} />}
 
       {reply.choices && reply.choices.length > 0 && (
@@ -331,6 +335,7 @@ function ReplyView({
           replyId={reply.replyId}
           question={question}
           citedFiles={[...new Set([...(reply.answer?.citations.map((c) => c.fileId) ?? []), ...(reply.files?.map((f) => f.id) ?? [])])].slice(0, 10)}
+          lessons={reply.lessonIds}
         />
       )}
 
@@ -726,6 +731,7 @@ export function AssistantWidget({ userId }: { userId: string }) {
                       <ReplyView
                         reply={m.reply}
                         question={m.request.message}
+                        userId={userId}
                         onAsk={ask}
                         onChoose={(fileId, label) => void send(m.request.message, { contextFileId: fileId, echo: false, echoText: `→ ${label}` })}
                         indexing={indexing}

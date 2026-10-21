@@ -11,11 +11,12 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.ts\"",
+    "test": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.ts\" \"packages/*/src/**/*.test.ts\"",
     "test:db": "scripts/test-db.sh",
     "eval:assistant": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/lib/assistant/eval/run.ts"
   },
   "dependencies": {
+    "@ai-pro/agent-core": "0.1.0",
     "@base-ui/react": "^1.9.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.3",
@@ -48,5 +49,8 @@
     "shadcn": "^4.21.4",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "workspaces": [
+    "packages/*"
+  ]
 }

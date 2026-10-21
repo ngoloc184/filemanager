@@ -1,5 +1,9 @@
 # AI Assistant (chatbox)
 
+> Since the agent was added, chat messages first go to the agent
+> ([ai-agent.md](ai-agent.md)), which handles file and folder operations and
+> passes everything else to the engine described here.
+
 A floating assistant in the signed-in app (bottom-right, or `Ctrl/⌘ + J`) that
 works on the files **the current user is allowed to see**. It understands
 follow-up questions, remembers what the user asks it to, answers questions

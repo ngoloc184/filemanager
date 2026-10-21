@@ -10,6 +10,7 @@ import { logEvent } from "@/lib/assistant/server";
 import { openUrl } from "@/lib/assistant/engine";
 import { UPLOADS_BUCKET, buildStoragePath } from "@/lib/storage";
 import type { ActionResult, ActionSpec } from "@/lib/assistant/actions";
+import { AGENT_TOKEN_PREFIX, fileAgent, verifyAgentAction } from "@/lib/agent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,7 +53,9 @@ export async function POST(request: Request) {
   if (!allow(user.id)) return json({ ok: false, message: "Thao tác quá nhanh, vui lòng thử lại sau." }, 429);
 
   const body = (await request.json().catch(() => ({}))) as { token?: unknown };
-  const verified = verifyAction(typeof body.token === "string" ? body.token : "", user.id);
+  const token = typeof body.token === "string" ? body.token : "";
+  if (token.startsWith(AGENT_TOKEN_PREFIX)) return runAgentAction(token, supabase, user.id, started);
+  const verified = verifyAction(token, user.id);
   if (!verified.ok) {
     return json(
       { ok: false, message: verified.reason === "expired" ? "Yêu cầu đã hết hạn, hãy hỏi lại trợ lý." : "Yêu cầu không hợp lệ." },
@@ -80,6 +83,46 @@ export async function POST(request: Request) {
 }
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+/** Confirmed agent tool: same checks as assistant actions, executed by the tool. */
+async function runAgentAction(token: string, supabase: Supabase, userId: string, started: number) {
+  const verified = verifyAgentAction(token, userId);
+  if (!verified.ok) {
+    return json(
+      { ok: false, message: verified.reason === "expired" ? "Yêu cầu đã hết hạn, hãy hỏi lại trợ lý." : "Yêu cầu không hợp lệ." },
+      verified.reason === "user" ? 403 : 400
+    );
+  }
+  const now = Date.now();
+  for (const [nonce, at] of used) if (now - at > 15 * 60_000) used.delete(nonce);
+  if (used.has(verified.nonce)) return json({ ok: false, message: "Thao tác này đã được thực hiện." }, 409);
+  used.set(verified.nonce, now);
+
+  let result: ActionResult;
+  try {
+    const done = await fileAgent.execute(verified.tool, verified.params, {
+      supabase,
+      userId,
+      index: async (fileId: string) => {
+        await createIndexer(supabase)?.({ fileId, limit: 1, budgetMs: 8000 });
+      },
+      engine: async () => {
+        throw new Error("not available while executing");
+      },
+    });
+    result = done.ok ? { ok: true, message: done.message, openUrl: done.openUrl } : { ok: false, message: done.message };
+    if (!done.ok) used.delete(verified.nonce);
+  } catch (error) {
+    used.delete(verified.nonce);
+    result = { ok: false, message: friendly(error) };
+  }
+  await logEvent(supabase, {
+    intent: `do:agent:${verified.tool}`.slice(0, 40),
+    latencyMs: Date.now() - started,
+    errorCode: result.ok ? null : "action_failed",
+  });
+  return json(result, result.ok ? 200 : 400);
+}
 
 async function execute(spec: ActionSpec, supabase: Supabase, userId: string): Promise<ActionResult> {
   switch (spec.kind) {

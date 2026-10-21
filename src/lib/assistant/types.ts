@@ -123,6 +123,16 @@ export type AssistantReply = {
   /** Ask the user which file they meant. */
   choices?: AssistantChoice[];
   steps?: AssistantStep[];
+  /** Folders listed by the agent (folder contents, trash). */
+  folders?: { id: string; name: string; openUrl: string }[];
+  /** Saved links listed by the agent. */
+  links?: { id: string; title: string; url: string }[];
+  /** Files in the trash listed by the agent. */
+  trash?: { id: string; name: string; deletedAt: string }[];
+  /** The client should offer a file picker that uploads into this folder. */
+  upload?: { folderId: string | null; folderName: string } | null;
+  /** Learned lessons used for this answer (sent back with 👍/👎). */
+  lessonIds?: string[];
   /** Conversation state to send back with the next question. */
   context?: ConversationContext;
   meta?: AssistantMeta;

@@ -15,6 +15,9 @@ function secret(): Buffer | null {
   return service ? createHash("sha256").update(`assistant-action:v1:${service}`).digest() : null;
 }
 
+/** Signing key shared with other server-side token types (e.g. the agent's). */
+export const actionSecret = secret;
+
 export function actionsConfigured(): boolean {
   return secret() !== null;
 }
