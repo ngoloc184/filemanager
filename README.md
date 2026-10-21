@@ -9,6 +9,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 - **Comments**: Multi-line comment threads on every file and folder (anyone who can view an item can comment; authors edit their own, owners can remove any)
 - **Text editor**: Create a `.txt` file directly in a folder, or edit small text files (each save becomes a new version)
 - **Saved links**: A private list of useful URLs with a title (e.g. “Daily progress update”)
+- **Chat**: Real-time direct messages with any registered user by e-mail; send text and files (the recipient gets view access), unread badge, “Seen”, unsend ([docs/chat.md](docs/chat.md))
 - **AI Agent**: Talk to your files in the chat (“Thêm file Hợp đồng.docx vào thư mục Kế toán”, “Xem thùng rác”, “Lưu link …”); asks for missing details, confirms every change, and learns new phrasings from all users — no LLM required ([docs/ai-agent.md](docs/ai-agent.md))
 - **File Management**: Download, view, and delete individual files
 - **Search**: Search through batches and files
@@ -41,7 +42,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280024...`)
+   (`202608280001...` through `202608280025...`)
 4. Migrate existing batch data into the new file system (idempotent, safe to re-run):
 
    ```sql
@@ -203,7 +204,7 @@ src/
 ├── app/
 │   ├── (dashboard)/       # Signed-in area sharing one layout + auth check
 │   │   ├── dashboard/     # My Files (folders, uploads, versions)
-│   │   ├── recent/  search/  shared/  links/  trash/  activity/  contacts/
+│   │   ├── recent/  search/  shared/  chat/  links/  trash/  activity/  contacts/
 │   ├── api/public-share/  # Public share-link download + info endpoints
 │   ├── share/[token]/     # Public share-link landing page
 │   ├── login/  register/  setup/

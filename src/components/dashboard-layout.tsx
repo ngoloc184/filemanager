@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
@@ -16,6 +16,7 @@ import { CommandPalette, openCommandPalette } from "@/components/command-palette
 import { AssistantWidget, clearAssistantHistory } from "@/components/assistant/assistant-widget";
 import { AiSummaryHost } from "@/components/files/ai-summary-dialog";
 import { NAV_ITEMS, isActive, type NavItem } from "@/components/navigation";
+import { subscribeToMessages, unreadCount } from "@/lib/services/chat";
 import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
@@ -24,8 +25,8 @@ interface DashboardLayoutProps {
 }
 
 const SECTIONS: { title: string; items: readonly NavItem[] }[] = [
-  { title: "Workspace", items: NAV_ITEMS.slice(0, 5) },
-  { title: "Library", items: NAV_ITEMS.slice(5) },
+  { title: "Workspace", items: NAV_ITEMS.slice(0, 6) },
+  { title: "Library", items: NAV_ITEMS.slice(6) },
 ];
 
 function ShortcutHint({ className }: { className?: string }) {
@@ -48,6 +49,7 @@ function SidebarContent({
   onLogout,
   onClose,
   indicatorId,
+  badges,
 }: {
   pathname: string;
   email?: string;
@@ -55,6 +57,8 @@ function SidebarContent({
   onLogout: () => void;
   onClose?: () => void;
   indicatorId: string;
+  /** counts shown next to nav items, by href */
+  badges?: Record<string, number>;
 }) {
   return (
     <div className="flex h-full flex-col">
@@ -125,6 +129,11 @@ function SidebarContent({
                       )}
                     />
                     <span className="relative">{label}</span>
+                    {(badges?.[href] ?? 0) > 0 && (
+                      <span className="relative ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-semibold text-white">
+                        {badges![href] > 99 ? "99+" : badges![href]}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -164,6 +173,42 @@ function SidebarContent({
   );
 }
 
+/**
+ * Unread chat messages for the sidebar badge, live. A new message from
+ * someone else shows a toast unless the chat page is already open.
+ */
+function useChatNotifications(userId: string, pathname: string, navigate: (href: string) => void): number {
+  const [unread, setUnread] = useState(0);
+  const onChat = pathname.startsWith("/chat");
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const refresh = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        void unreadCount().then((n) => !cancelled && setUnread(n));
+      }, 300);
+    };
+    refresh();
+    const unsubscribe = subscribeToMessages((row) => {
+      refresh();
+      if (row.sender_id !== userId && !onChat) {
+        toast("New chat message", {
+          action: { label: "Open", onClick: () => navigate(`/chat?c=${row.conversation_id}`) },
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [userId, onChat, navigate]);
+
+  return unread;
+}
+
 export default function DashboardLayout({
   children,
   user,
@@ -181,6 +226,8 @@ export default function DashboardLayout({
   };
 
   const current = NAV_ITEMS.find((item) => isActive(pathname, item.href));
+  const chatUnread = useChatNotifications(user.id, pathname, (href) => router.push(href));
+  const badges = { "/chat": chatUnread };
 
   return (
     <div className="relative flex min-h-screen">
@@ -197,6 +244,7 @@ export default function DashboardLayout({
           onNavigate={() => {}}
           onLogout={handleLogout}
           indicatorId="sidebar-active"
+          badges={badges}
         />
       </aside>
 
@@ -227,6 +275,7 @@ export default function DashboardLayout({
                 onLogout={handleLogout}
                 onClose={() => setSidebarOpen(false)}
                 indicatorId="drawer-active"
+                badges={badges}
               />
             </motion.aside>
           </>
