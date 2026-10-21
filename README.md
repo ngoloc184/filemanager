@@ -41,7 +41,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280023...`)
+   (`202608280001...` through `202608280024...`)
 4. Migrate existing batch data into the new file system (idempotent, safe to re-run):
 
    ```sql
