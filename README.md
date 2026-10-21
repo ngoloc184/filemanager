@@ -53,12 +53,14 @@ A modern web application for managing file uploads, built with Next.js, Supabase
    - Set it as **Private** (not public)
    - File size limit: 50 MB (or your preference)
 
-### 3. E-mail codes for sign-up and password reset
+### 3. E-mail links for sign-up and password reset
 
-Sign-up and “Forgot password” use 6-digit codes sent by e-mail. Configure your
-own SMTP, the two e-mail templates in `supabase/email-templates/` and the Site
-URL — see [docs/auth-email.md](docs/auth-email.md). Without custom SMTP,
-Supabase only e-mails members of your Supabase team.
+Sign-up confirmation and “Forgot password” use the link in Supabase's e-mail,
+handled by `/auth/confirm`. Set the **Site URL** to your deployed address and
+add `https://<domain>/auth/confirm**` to the Redirect URLs, configure SMTP, and
+optionally apply the any-device link templates with
+`SUPABASE_ACCESS_TOKEN=… npm run email:templates` — see
+[docs/auth-email.md](docs/auth-email.md).
 
 ### 4. Create an Admin Account
 

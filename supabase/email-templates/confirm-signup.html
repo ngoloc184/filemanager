@@ -1,12 +1,12 @@
-<!-- Supabase Dashboard → Authentication → Emails → "Confirm sign up".
-     Subject: Your File Manager verification code: {{ .Token }} -->
+<!-- Supabase "Confirm sign up" e-mail. The button opens /auth/confirm with a
+     token hash, which works on any device and browser.
+     Applied by `npm run email:templates` (subject is set there too). -->
 <div style="font-family:Inter,Segoe UI,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#111827">
-  <h2 style="margin:0 0 8px">Confirm your e-mail</h2>
-  <p style="margin:0 0 16px;color:#4b5563">Enter this code on the sign-up page to finish creating your account:</p>
-  <p style="margin:0 0 16px;font-size:32px;font-weight:700;letter-spacing:8px;font-family:Menlo,Consolas,monospace">{{ .Token }}</p>
-  <p style="margin:0 0 16px;color:#6b7280;font-size:13px">The code expires soon. If you did not sign up, ignore this e-mail.</p>
-  <p style="margin:0;color:#6b7280;font-size:13px">
-    Or confirm with this link:
-    <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/dashboard">confirm my e-mail</a>
+  <h2 style="margin:0 0 8px">Xác nhận đăng ký tài khoản</h2>
+  <p style="margin:0 0 20px;color:#4b5563">Bấm nút bên dưới để kích hoạt tài khoản của bạn.<br><span style="color:#6b7280">Click the button below to activate your account.</span></p>
+  <p style="margin:0 0 20px">
+    <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&flow=signup&next=/dashboard"
+       style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:10px">Xác nhận e-mail / Confirm e-mail</a>
   </p>
+  <p style="margin:0;color:#6b7280;font-size:13px">Link chỉ dùng được một lần và sẽ hết hạn. Nếu bạn không đăng ký, hãy bỏ qua e-mail này.<br>The link works once and expires. If you did not sign up, ignore this e-mail.</p>
 </div>

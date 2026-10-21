@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Loader2, LogIn } from "lucide-react";
@@ -10,7 +10,8 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authErrorMessage } from "@/lib/auth-otp";
+import { AuthNotice } from "@/components/auth/check-inbox";
+import { OUTCOME_MESSAGE, authErrorMessage, outcomeMessage, type ConfirmOutcome } from "@/lib/auth-links";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -20,11 +21,15 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
-  // /auth/confirm sends people here when a link was invalid or expired
-  const linkError = searchParams.get("error") === "link";
-  useEffect(() => {
-    if (linkError) toast.error("This link is invalid or has expired. Sign in, or request a new code.");
-  }, [linkError]);
+  // /auth/confirm sends people here after a link that did not sign them in
+  const notice = searchParams.get("notice") as ConfirmOutcome | null;
+  const linkError = searchParams.get("error") as ConfirmOutcome | null;
+  const linkMessage =
+    notice === "confirmed"
+      ? { tone: "success" as const, text: OUTCOME_MESSAGE.confirmed }
+      : linkError && linkError in OUTCOME_MESSAGE
+        ? { tone: "error" as const, text: outcomeMessage(linkError, "signup") }
+        : null;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,8 +43,8 @@ function LoginForm() {
     if (error) {
       setLoading(false);
       if (/not confirmed/i.test(error.message) || error.code === "email_not_confirmed") {
-        // finish the sign-up with the e-mailed code
-        toast.error("Confirm your e-mail first: enter the code we send you.");
+        // the account still has to click its confirmation link
+        toast.error("Confirm your e-mail first: click the link in the e-mail we sent you.");
         router.push(`/register?verify=${encodeURIComponent(email.trim())}`);
         return;
       }
@@ -66,6 +71,7 @@ function LoginForm() {
         </>
       }
     >
+      {linkMessage && <AuthNotice tone={linkMessage.tone}>{linkMessage.text}</AuthNotice>}
       <form onSubmit={handleLogin} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>

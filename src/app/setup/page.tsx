@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { confirmRedirect } from "@/lib/auth-links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +29,8 @@ export default function SetupPage() {
         data: {
           role: "admin",
         },
+        // the confirmation link lands on /auth/confirm, which signs the user in
+        emailRedirectTo: confirmRedirect(window.location.origin, "signup"),
       },
     });
 
@@ -44,9 +47,9 @@ export default function SetupPage() {
       router.refresh();
       return;
     }
-    toast.success("Admin account created! Enter the code we e-mailed to confirm it.");
-    // confirm the address with the e-mailed code
-    router.push(`/register?verify=${encodeURIComponent(email.trim())}`);
+    toast.success("Admin account created! Click the link we e-mailed to confirm it.");
+    // shows "check your inbox" with a resend button
+    router.push(`/register?verify=${encodeURIComponent(email.trim())}&sent=1`);
   };
 
   return (
