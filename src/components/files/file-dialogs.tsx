@@ -32,7 +32,7 @@ import {
   type FileRow,
   type FileVersion,
 } from "@/lib/types/database";
-import { formatBytes } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 import { decodeTextFile } from "@/lib/text-files";
 import { format } from "date-fns";
 
@@ -631,10 +631,13 @@ export function PreviewDialog({
   open,
   onOpenChange,
   file,
+  className,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   file: PreviewableFile;
+  /** extra classes for the dialog (e.g. a higher z-index above a floating panel) */
+  className?: string;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [textContent, setTextContent] = useState<string | null>(null);
@@ -691,7 +694,7 @@ export function PreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl">
+      <DialogContent className={cn("sm:max-w-5xl", className)}>
         <DialogHeader>
           <DialogTitle className="line-clamp-3" title={file.name}>
             {file.name}

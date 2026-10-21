@@ -1,9 +1,12 @@
 # Chat
 
-Real-time direct messages between two users (sidebar → **Chat**, `/chat`).
+Real-time direct messages between two users, in a floating widget on every
+page (the chat button bottom-right, next to the AI Assistant; the red badge
+counts unread messages). Opening one widget closes the other.
 
-* **Start**: type the e-mail of a registered user. Each pair of users has one
-  conversation; starting again opens it.
+* **Start**: the widget lists the people you chatted with; add someone new by
+  typing their e-mail at the top. Each pair of users has one conversation;
+  adding them again opens it.
 * **Notes to self**: type your own e-mail (or use the “Notes to self” button)
   to keep messages and files for yourself; it is listed as “… (you)”, without
   unread counts or “Seen”.
@@ -13,12 +16,13 @@ Real-time direct messages between two users (sidebar → **Chat**, `/chat`).
   access to it; an existing share is never reduced. Only files you own or
   manage can be sent.
 * **Real time**: new messages, unsends and “Seen” appear without reloading
-  (Supabase Realtime, `postgres_changes`). The sidebar shows the number of
-  unread messages, and a toast appears when a message arrives on another page.
+  (Supabase Realtime, `postgres_changes`). The chat button shows the number of
+  unread messages, and a toast (“Open”) appears when a message arrives while
+  that conversation is not on screen.
 * **Unsend**: hover your message → trash icon; the text and file link are
   removed for both people.
-* Deep link: `/chat?to=user@example.com` pre-fills the e-mail;
-  `/chat?c=<conversation id>` opens a conversation.
+* From code: `openChat({ email })` or `openChat({ conversationId })`
+  (`src/components/chat/chat-widget.tsx`) opens the widget.
 
 ## Setup
 

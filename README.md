@@ -204,7 +204,7 @@ src/
 ├── app/
 │   ├── (dashboard)/       # Signed-in area sharing one layout + auth check
 │   │   ├── dashboard/     # My Files (folders, uploads, versions)
-│   │   ├── recent/  search/  shared/  chat/  links/  trash/  activity/  contacts/
+│   │   ├── recent/  search/  shared/  links/  trash/  activity/  contacts/
 │   ├── api/public-share/  # Public share-link download + info endpoints
 │   ├── share/[token]/     # Public share-link landing page
 │   ├── login/  register/  setup/

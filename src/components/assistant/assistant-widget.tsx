@@ -26,6 +26,7 @@ import { cn, formatBytes } from "@/lib/utils";
 import type { AssistantFile, AssistantReply } from "@/lib/assistant/types";
 import { ActionCard, AgentListsView, AnswerView, ComparisonView, FeedbackBar, MemoryProposalCard, StepsView, UploadCard } from "./assistant-parts";
 import { MemoryPanel } from "./memory-panel";
+import { announceWidget, onOtherWidget } from "@/components/floating-widgets";
 
 type Message =
   | { id: string; role: "user"; text: string }
@@ -352,6 +353,8 @@ function ReplyView({
  */
 export function AssistantWidget({ userId }: { userId: string }) {
   const [open, setOpen] = useState(false);
+  /** the Chat widget is open: it uses the same corner */
+  const [otherOpen, setOtherOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
@@ -370,6 +373,19 @@ export function AssistantWidget({ userId }: { userId: string }) {
   // come back the way the user left it.
   const openRef = useRef(open);
   openRef.current = open;
+  // share the bottom-right corner with the Chat widget
+  useEffect(() => {
+    announceWidget("assistant", open);
+  }, [open]);
+  useEffect(
+    () =>
+      onOtherWidget("assistant", (otherIsOpen) => {
+        setOtherOpen(otherIsOpen);
+        if (otherIsOpen) setOpen(false);
+      }),
+    []
+  );
+
   useEffect(
     () =>
       onAiSummaryVisibility((visible) => {
@@ -566,7 +582,7 @@ export function AssistantWidget({ userId }: { userId: string }) {
     <>
       {/* Launcher */}
       <AnimatePresence>
-        {!open && !summaryOpen && (
+        {!open && !summaryOpen && !otherOpen && (
           <motion.button
             type="button"
             onClick={() => setOpen(true)}
