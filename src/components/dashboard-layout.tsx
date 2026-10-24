@@ -17,6 +17,9 @@ import { AssistantWidget, clearAssistantHistory } from "@/components/assistant/a
 import { AiSummaryHost } from "@/components/files/ai-summary-dialog";
 import { NAV_ITEMS, isActive, type NavItem } from "@/components/navigation";
 import { ChatWidget } from "@/components/chat/chat-widget";
+import { UserAvatar } from "@/components/chat/user-avatar";
+import { ProfileDialog } from "@/components/profile/profile-dialog";
+import { useMyProfile } from "@/lib/services/profile";
 import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
@@ -47,6 +50,7 @@ function SidebarContent({
   email,
   onNavigate,
   onLogout,
+  onProfile,
   onClose,
   indicatorId,
 }: {
@@ -54,9 +58,11 @@ function SidebarContent({
   email?: string;
   onNavigate: () => void;
   onLogout: () => void;
+  onProfile: () => void;
   onClose?: () => void;
   indicatorId: string;
 }) {
+  const profile = useMyProfile();
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center justify-between px-5">
@@ -138,16 +144,21 @@ function SidebarContent({
         <div className="rounded-2xl border bg-background/50 p-1 shadow-sm">
           <StorageUsage />
         </div>
-        <div className="flex items-center gap-3 rounded-xl px-2 py-2">
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white shadow-md shadow-primary/25">
-            {email?.charAt(0).toUpperCase() || "U"}
+        <button
+          type="button"
+          onClick={onProfile}
+          title="Edit your profile"
+          className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-muted/60"
+        >
+          <span className="relative">
+            <UserAvatar name={profile?.display_name || email || "U"} path={profile?.avatar_path} />
             <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar bg-success" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{email}</p>
-            <p className="text-[11px] text-muted-foreground">Personal workspace</p>
-          </div>
-        </div>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">{profile?.display_name || email}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">{profile?.display_name ? email : "Edit your profile"}</span>
+          </span>
+        </button>
         <div className="flex items-center justify-between gap-2 px-1">
           <ThemeToggle layoutId={`${indicatorId}-theme`} />
           <Button
@@ -170,6 +181,7 @@ export default function DashboardLayout({
   user,
 }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -190,6 +202,7 @@ export default function DashboardLayout({
       <AssistantWidget userId={user.id} />
       <ChatWidget userId={user.id} email={user.email} />
       <AiSummaryHost />
+      <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
 
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-[17rem] shrink-0 border-r bg-sidebar/60 backdrop-blur-2xl lg:block">
@@ -198,6 +211,7 @@ export default function DashboardLayout({
           email={user.email}
           onNavigate={() => {}}
           onLogout={handleLogout}
+          onProfile={() => setProfileOpen(true)}
           indicatorId="sidebar-active"
         />
       </aside>
@@ -227,6 +241,10 @@ export default function DashboardLayout({
                 email={user.email}
                 onNavigate={() => setSidebarOpen(false)}
                 onLogout={handleLogout}
+                onProfile={() => {
+                  setSidebarOpen(false);
+                  setProfileOpen(true);
+                }}
                 onClose={() => setSidebarOpen(false)}
                 indicatorId="drawer-active"
               />
