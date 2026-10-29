@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
-import { Check, CheckCheck, Info, Loader2, MessagesSquare, Minus, NotebookPen, Plus, Users, X, ArrowLeft } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Info, Loader2, Maximize2, MessagesSquare, Minimize2, Minus, NotebookPen, Plus, Users, X } from "lucide-react";
 import { PreviewDialog } from "@/components/files/file-dialogs";
 import { announceWidget, onOtherWidget } from "@/components/floating-widgets";
 import { NotificationBanner, NotificationToggle, useChatNotifications } from "@/components/chat/chat-notifications";
@@ -56,6 +56,7 @@ import { cn } from "@/lib/utils";
 
 const PAGE = 50;
 const OPEN_EVENT = "fm:open-chat";
+const EXPANDED_KEY = "fm:chat-expanded";
 
 type View = "list" | "thread" | "picker" | "new-group" | "info";
 
@@ -113,6 +114,8 @@ function typingText(names: string[]): string | null {
 export function ChatWidget({ userId, email: myEmail }: { userId: string; email?: string }) {
   const [open, setOpen] = useState(false);
   const [otherOpen, setOtherOpen] = useState(false);
+  // large window with the list beside the conversation (like Messenger)
+  const [expanded, setExpanded] = useState(false);
   const [view, setView] = useState<View>("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [unread, setUnread] = useState(0);
@@ -245,6 +248,26 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
   const patchMessage = useCallback((id: string, patch: Partial<ChatMessage> | ((m: ChatMessage) => Partial<ChatMessage>)) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...(typeof patch === "function" ? patch(m) : patch) } : m)));
   }, []);
+
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (window.localStorage.getItem(EXPANDED_KEY) === "1") setExpanded(true);
+    } catch {
+      // storage unavailable (private mode): start collapsed
+    }
+  }, []);
+
+  const toggleExpanded = () => {
+    setExpanded((prev) => {
+      try {
+        window.localStorage.setItem(EXPANDED_KEY, prev ? "0" : "1");
+      } catch {
+        // not remembered
+      }
+      return !prev;
+    });
+  };
 
   // ---------------------------------------------------------------- widgets & opening
   useEffect(() => {
@@ -709,6 +732,343 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
   );
   const selfChat = selected?.kind === "direct" && selected.other_id === userId;
 
+  // ---------------------------------------------------------------- panes
+  // the open conversation and its screens (null: nothing selected)
+  const mainPane =
+    view === "picker" && selectedId ? (
+      <FilePicker
+        userId={userId}
+        onBack={() => setView("thread")}
+        onPick={async (file) => {
+          await sendMessage(selectedId, null, file.id);
+          await refreshThread(selectedId);
+          setView("thread");
+        }}
+      />
+    ) : view === "new-group" ? (
+      <NewGroupView
+        suggestions={suggestions}
+        onBack={() => setView("list")}
+        onCreate={async (title, emails) => {
+          const id = await createGroup(title, emails);
+          await loadChats();
+          openConversation(id);
+        }}
+      />
+    ) : view === "info" && selected ? (
+      <InfoView
+        key={selected.id}
+        chat={selected}
+        members={members}
+        pins={pins}
+        myId={userId}
+        nameOf={nameOf}
+        onBack={() => setView("thread")}
+        onChanged={() => {
+          void loadChats();
+          if (selectedId) void reloadMembers(selectedId);
+        }}
+        onLeft={() => {
+          setSelectedId(null);
+          setView("list");
+          void loadChats();
+        }}
+        onJump={(id) => void jumpTo(id)}
+        onUnpin={(id) => void pin(id, false)}
+      />
+    ) : (view === "thread" || view === "info") && selectedId ? (
+      <>
+        <header className="flex items-center gap-2 border-b px-3 py-2.5">
+          <button type="button" onClick={() => setView("list")} className={cn(iconButton, expanded && "md:hidden")} aria-label="Back to chats">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={() => selected && setView("info")} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+            <UserAvatar
+              name={selected ? chatTitle(selected, userId) : null}
+              path={isGroup ? selected?.avatar_path : selected?.other_avatar}
+              group={isGroup}
+              size="sm"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">{selected ? chatTitle(selected, userId) : "…"}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {typingNames ?? (isGroup ? `${selected?.member_count ?? members.length} members` : selfChat ? "Notes to self" : selected?.other_email ?? "")}
+              </span>
+            </span>
+          </button>
+          <button type="button" onClick={() => setView("info")} disabled={!selected} className={iconButton} aria-label="Conversation info" title="Info">
+            <Info className="h-4 w-4" />
+          </button>
+          {/* side by side, the window buttons are in the list's header */}
+          <div className={cn("flex items-center", expanded && "md:hidden")}>
+            <button
+              type="button"
+              onClick={toggleExpanded}
+              className={cn(iconButton, "hidden sm:block")}
+              aria-label={expanded ? "Shrink chat" : "Expand chat"}
+              aria-pressed={expanded}
+              title={expanded ? "Shrink" : "Expand"}
+            >
+              {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+            <button type="button" onClick={() => setOpen(false)} className={cn(iconButton, "hidden sm:block")} aria-label="Minimize">
+              <Minus className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={() => setOpen(false)} className={iconButton} aria-label="Close">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </header>
+
+        <PinnedBar pins={pins} nameOf={nameOf} canPin={canPin} onJump={(id) => void jumpTo(id)} onUnpin={(id) => void pin(id, false)} />
+
+        <div className="@container relative flex-1 overflow-y-auto px-3 py-3" style={background ?? undefined}>
+          {threadLoading ? (
+            <div className="flex h-full items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : threadError ? (
+            <p className="text-center text-sm text-destructive">{threadError}</p>
+          ) : messages.length === 0 ? (
+            <p className="pt-10 text-center text-sm text-muted-foreground">{selfChat ? "Keep notes and files for yourself here." : "Say hello 👋"}</p>
+          ) : (
+            <div className="space-y-3">
+              {hasOlder && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => void loadOlder()}
+                    disabled={loadingOlder}
+                    className="inline-flex items-center gap-1 rounded-full border bg-background/80 px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    {loadingOlder && <Loader2 className="h-3 w-3 animate-spin" />}
+                    Load older messages
+                  </button>
+                </div>
+              )}
+              {groups.map((group) => (
+                <div key={group.label + group.items[0].id} className="space-y-1.5">
+                  <p className="py-1 text-center text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                    <span className="rounded-full bg-background/70 px-2 py-0.5 backdrop-blur">{group.label}</span>
+                  </p>
+                  {group.items.map((m, i) => {
+                    if (m.kind === "system") return <SystemRow key={m.id} m={m} myId={userId} nameOf={nameOf} />;
+                    const prev = group.items[i - 1];
+                    const member = memberById.get(m.sender_id);
+                    return (
+                      <MessageRow
+                        key={m.id}
+                        m={m}
+                        myId={userId}
+                        isGroup={isGroup}
+                        sender={{ name: nameOf(m.sender_id), avatar_path: member?.avatar_path ?? null }}
+                        showSender={!prev || prev.sender_id !== m.sender_id || prev.kind === "system"}
+                        nameOf={nameOf}
+                        people={people}
+                        pinned={pinnedIds.has(m.id)}
+                        canPin={canPin}
+                        onReact={(emoji) => void react(m, emoji)}
+                        onReply={() => setReplyTo(m)}
+                        onPin={(on) => void pin(m.id, on)}
+                        onUnsend={() => void unsend(m)}
+                        onRetry={() => retry(m)}
+                        onJump={(id) => void jumpTo(id)}
+                        onPreview={setPreviewFile}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+              {lastMine && !selfChat && (
+                <div className="flex items-center justify-end gap-1 text-[11px] text-muted-foreground">
+                  {isGroup ? (
+                    seenBy.length ? (
+                      <>
+                        <span className="mr-0.5">Seen by</span>
+                        {seenBy.slice(0, 5).map((m) => (
+                          <span key={m.user_id} title={personName(m)}>
+                            <UserAvatar name={personName(m)} path={m.avatar_path} size="xs" />
+                          </span>
+                        ))}
+                        {seenBy.length > 5 && <span>+{seenBy.length - 5}</span>}
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        Sent
+                      </>
+                    )
+                  ) : seenBy.length ? (
+                    <>
+                      <CheckCheck className="h-3.5 w-3.5 text-primary" />
+                      Seen
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      Sent
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {typingNames && (
+          <p className="flex items-center gap-1.5 border-t bg-background/60 px-4 py-1 text-[11px] text-muted-foreground">
+            <span className="flex gap-0.5">
+              <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
+              <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
+              <span className="h-1 w-1 animate-bounce rounded-full bg-current" />
+            </span>
+            {typingNames}
+          </p>
+        )}
+
+        <Composer
+          key={selectedId}
+          members={mentionCandidates}
+          replyTo={replyTo}
+          replyName={replyTo ? nameOf(replyTo.sender_id) : ""}
+          onCancelReply={() => setReplyTo(null)}
+          onSend={send}
+          onTyping={() => typingRef.current?.typing()}
+          onUpload={(files) => void sendFiles(files)}
+          onPickFile={() => setView("picker")}
+          upload={upload}
+        />
+      </>
+    ) : null;
+
+  // conversations, start a chat, new group
+  const listPane = (
+    <>
+      <header className="flex items-center gap-3 border-b px-4 py-3">
+        <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-brand text-white shadow-lg shadow-primary/30">
+          <MessagesSquare className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">Chat</p>
+          <p className="truncate text-[11px] text-muted-foreground">Messages, groups and files, in real time</p>
+        </div>
+        <NotificationToggle notifications={notifications} />
+        <button
+          type="button"
+          onClick={toggleExpanded}
+          className={cn(iconButton, "hidden sm:block")}
+          aria-label={expanded ? "Shrink chat" : "Expand chat"}
+          aria-pressed={expanded}
+          title={expanded ? "Shrink" : "Expand"}
+        >
+          {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className={cn(iconButton, "hidden sm:block")} aria-label="Minimize">
+          <Minus className="h-4 w-4" />
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className={iconButton} aria-label="Close">
+          <X className="h-4 w-4" />
+        </button>
+      </header>
+      <NotificationBanner notifications={notifications} />
+
+      <form
+        className="flex gap-2 border-b p-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void start();
+        }}
+      >
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Add someone: user@example.com"
+          aria-label="Email to chat with"
+          className="h-9 min-w-0 flex-1 rounded-lg border bg-background/60 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        />
+        <button
+          type="submit"
+          disabled={!email.trim() || starting}
+          aria-label="Start chat"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand text-white disabled:opacity-40"
+        >
+          {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+        </button>
+      </form>
+      <div className="flex border-b text-xs text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => setView("new-group")}
+          className="flex flex-1 items-center justify-center gap-1.5 px-4 py-2 transition-colors hover:bg-muted/50 hover:text-foreground"
+        >
+          <Users className="h-3.5 w-3.5" />
+          New group
+        </button>
+        {myEmail && (
+          <button
+            type="button"
+            onClick={() => void start(myEmail)}
+            disabled={starting}
+            className="flex flex-1 items-center justify-center gap-1.5 border-l px-4 py-2 transition-colors hover:bg-muted/50 hover:text-foreground"
+          >
+            <NotebookPen className="h-3.5 w-3.5" />
+            Notes to self
+          </button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {chats === null ? (
+          <div className="space-y-2 p-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/40" />
+            ))}
+          </div>
+        ) : chatsError ? (
+          <p className="p-4 text-sm text-destructive">{chatsError}</p>
+        ) : chats.length === 0 ? (
+          <div className="flex flex-col items-center px-6 py-12 text-center">
+            <MessagesSquare className="mb-3 h-12 w-12 text-muted-foreground/50" />
+            <p className="text-sm font-medium">No conversations yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">Add someone by e-mail above, or create a group.</p>
+          </div>
+        ) : (
+          <div className="divide-y">
+            {chats.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => openConversation(c.id)}
+                className={cn("flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50", c.id === selectedId && "bg-muted/40")}
+              >
+                <UserAvatar name={chatTitle(c, userId)} path={c.kind === "group" ? c.avatar_path : c.other_avatar} group={c.kind === "group"} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <p className={cn("min-w-0 flex-1 truncate text-sm", c.unread ? "font-semibold" : "font-medium")}>
+                      {chatTitle(c, userId)}
+                      {c.kind === "group" && <span className="ml-1 text-[11px] font-normal text-muted-foreground">· {c.member_count}</span>}
+                    </p>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">{listTime(c.last_message_at)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className={cn("min-w-0 flex-1 truncate text-xs", c.unread ? "text-foreground" : "text-muted-foreground")}>{messagePreview(c, userId)}</p>
+                    {c.unread > 0 && (
+                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-semibold text-white">
+                        {c.unread > 99 ? "99+" : c.unread}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   // ---------------------------------------------------------------- render
   return (
     <>
@@ -752,314 +1112,31 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
             exit={{ opacity: 0, scale: 0.92, y: 24 }}
             transition={{ type: "spring", stiffness: 380, damping: 32 }}
             style={{ transformOrigin: "bottom right" }}
-            className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-popover/95 backdrop-blur-2xl sm:inset-auto sm:bottom-5 sm:right-5 sm:h-[min(680px,calc(100vh-7rem))] sm:w-[420px] sm:rounded-3xl sm:border sm:shadow-[0_30px_80px_-20px_rgb(0_0_0/0.45)]"
+            className={cn(
+              "fixed inset-0 z-[60] flex flex-col overflow-hidden bg-popover/95 backdrop-blur-2xl sm:inset-auto sm:bottom-5 sm:right-5 sm:rounded-3xl sm:border sm:shadow-[0_30px_80px_-20px_rgb(0_0_0/0.45)] sm:transition-[width,height] sm:duration-300",
+              expanded
+                ? "sm:h-[calc(100vh-2.5rem)] sm:w-[min(1100px,calc(100vw-2.5rem))]"
+                : "sm:h-[min(680px,calc(100vh-7rem))] sm:w-[420px]"
+            )}
           >
-            {view === "picker" && selectedId ? (
-              <FilePicker
-                userId={userId}
-                onBack={() => setView("thread")}
-                onPick={async (file) => {
-                  await sendMessage(selectedId, null, file.id);
-                  await refreshThread(selectedId);
-                  setView("thread");
-                }}
-              />
-            ) : view === "new-group" ? (
-              <NewGroupView
-                suggestions={suggestions}
-                onBack={() => setView("list")}
-                onCreate={async (title, emails) => {
-                  const id = await createGroup(title, emails);
-                  await loadChats();
-                  openConversation(id);
-                }}
-              />
-            ) : view === "info" && selected ? (
-              <InfoView
-                key={selected.id}
-                chat={selected}
-                members={members}
-                pins={pins}
-                myId={userId}
-                nameOf={nameOf}
-                onBack={() => setView("thread")}
-                onChanged={() => {
-                  void loadChats();
-                  if (selectedId) void reloadMembers(selectedId);
-                }}
-                onLeft={() => {
-                  setSelectedId(null);
-                  setView("list");
-                  void loadChats();
-                }}
-                onJump={(id) => void jumpTo(id)}
-                onUnpin={(id) => void pin(id, false)}
-              />
-            ) : (view === "thread" || view === "info") && selectedId ? (
-              <>
-                <header className="flex items-center gap-2 border-b px-3 py-2.5">
-                  <button type="button" onClick={() => setView("list")} className={iconButton} aria-label="Back to chats">
-                    <ArrowLeft className="h-4 w-4" />
-                  </button>
-                  <button type="button" onClick={() => selected && setView("info")} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                    <UserAvatar
-                      name={selected ? chatTitle(selected, userId) : null}
-                      path={isGroup ? selected?.avatar_path : selected?.other_avatar}
-                      group={isGroup}
-                      size="sm"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold">{selected ? chatTitle(selected, userId) : "…"}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {typingNames ?? (isGroup ? `${selected?.member_count ?? members.length} members` : selfChat ? "Notes to self" : selected?.other_email ?? "")}
-                      </span>
-                    </span>
-                  </button>
-                  <button type="button" onClick={() => setView("info")} disabled={!selected} className={iconButton} aria-label="Conversation info" title="Info">
-                    <Info className="h-4 w-4" />
-                  </button>
-                  <button type="button" onClick={() => setOpen(false)} className={cn(iconButton, "hidden sm:block")} aria-label="Minimize">
-                    <Minus className="h-4 w-4" />
-                  </button>
-                  <button type="button" onClick={() => setOpen(false)} className={iconButton} aria-label="Close">
-                    <X className="h-4 w-4" />
-                  </button>
-                </header>
-
-                <PinnedBar pins={pins} nameOf={nameOf} canPin={canPin} onJump={(id) => void jumpTo(id)} onUnpin={(id) => void pin(id, false)} />
-
-                <div className="relative flex-1 overflow-y-auto px-3 py-3" style={background ?? undefined}>
-                  {threadLoading ? (
-                    <div className="flex h-full items-center justify-center">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : threadError ? (
-                    <p className="text-center text-sm text-destructive">{threadError}</p>
-                  ) : messages.length === 0 ? (
-                    <p className="pt-10 text-center text-sm text-muted-foreground">{selfChat ? "Keep notes and files for yourself here." : "Say hello 👋"}</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {hasOlder && (
-                        <div className="flex justify-center">
-                          <button
-                            type="button"
-                            onClick={() => void loadOlder()}
-                            disabled={loadingOlder}
-                            className="inline-flex items-center gap-1 rounded-full border bg-background/80 px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            {loadingOlder && <Loader2 className="h-3 w-3 animate-spin" />}
-                            Load older messages
-                          </button>
-                        </div>
-                      )}
-                      {groups.map((group) => (
-                        <div key={group.label + group.items[0].id} className="space-y-1.5">
-                          <p className="py-1 text-center text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
-                            <span className="rounded-full bg-background/70 px-2 py-0.5 backdrop-blur">{group.label}</span>
-                          </p>
-                          {group.items.map((m, i) => {
-                            if (m.kind === "system") return <SystemRow key={m.id} m={m} myId={userId} nameOf={nameOf} />;
-                            const prev = group.items[i - 1];
-                            const member = memberById.get(m.sender_id);
-                            return (
-                              <MessageRow
-                                key={m.id}
-                                m={m}
-                                myId={userId}
-                                isGroup={isGroup}
-                                sender={{ name: nameOf(m.sender_id), avatar_path: member?.avatar_path ?? null }}
-                                showSender={!prev || prev.sender_id !== m.sender_id || prev.kind === "system"}
-                                nameOf={nameOf}
-                                people={people}
-                                pinned={pinnedIds.has(m.id)}
-                                canPin={canPin}
-                                onReact={(emoji) => void react(m, emoji)}
-                                onReply={() => setReplyTo(m)}
-                                onPin={(on) => void pin(m.id, on)}
-                                onUnsend={() => void unsend(m)}
-                                onRetry={() => retry(m)}
-                                onJump={(id) => void jumpTo(id)}
-                                onPreview={setPreviewFile}
-                              />
-                            );
-                          })}
-                        </div>
-                      ))}
-                      {lastMine && !selfChat && (
-                        <div className="flex items-center justify-end gap-1 text-[11px] text-muted-foreground">
-                          {isGroup ? (
-                            seenBy.length ? (
-                              <>
-                                <span className="mr-0.5">Seen by</span>
-                                {seenBy.slice(0, 5).map((m) => (
-                                  <span key={m.user_id} title={personName(m)}>
-                                    <UserAvatar name={personName(m)} path={m.avatar_path} size="xs" />
-                                  </span>
-                                ))}
-                                {seenBy.length > 5 && <span>+{seenBy.length - 5}</span>}
-                              </>
-                            ) : (
-                              <>
-                                <Check className="h-3.5 w-3.5" />
-                                Sent
-                              </>
-                            )
-                          ) : seenBy.length ? (
-                            <>
-                              <CheckCheck className="h-3.5 w-3.5 text-primary" />
-                              Seen
-                            </>
-                          ) : (
-                            <>
-                              <Check className="h-3.5 w-3.5" />
-                              Sent
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
+            {expanded ? (
+              <div className="flex min-h-0 flex-1">
+                <div className="hidden w-[340px] shrink-0 flex-col border-r md:flex">{listPane}</div>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  {mainPane ?? (
+                    <>
+                      <div className="flex min-h-0 flex-1 flex-col md:hidden">{listPane}</div>
+                      <div className="hidden flex-1 flex-col items-center justify-center gap-2 px-8 text-center md:flex">
+                        <MessagesSquare className="h-12 w-12 text-muted-foreground/40" />
+                        <p className="text-sm font-medium">Select a conversation</p>
+                        <p className="text-xs text-muted-foreground">Or start one by e-mail, or create a group, on the left.</p>
+                      </div>
+                    </>
                   )}
-                  <div ref={bottomRef} />
                 </div>
-
-                {typingNames && (
-                  <p className="flex items-center gap-1.5 border-t bg-background/60 px-4 py-1 text-[11px] text-muted-foreground">
-                    <span className="flex gap-0.5">
-                      <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
-                      <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
-                      <span className="h-1 w-1 animate-bounce rounded-full bg-current" />
-                    </span>
-                    {typingNames}
-                  </p>
-                )}
-
-                <Composer
-                  key={selectedId}
-                  members={mentionCandidates}
-                  replyTo={replyTo}
-                  replyName={replyTo ? nameOf(replyTo.sender_id) : ""}
-                  onCancelReply={() => setReplyTo(null)}
-                  onSend={send}
-                  onTyping={() => typingRef.current?.typing()}
-                  onUpload={(files) => void sendFiles(files)}
-                  onPickFile={() => setView("picker")}
-                  upload={upload}
-                />
-              </>
+              </div>
             ) : (
-              <>
-                <header className="flex items-center gap-3 border-b px-4 py-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-brand text-white shadow-lg shadow-primary/30">
-                    <MessagesSquare className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">Chat</p>
-                    <p className="text-[11px] text-muted-foreground">Messages, groups and files, in real time</p>
-                  </div>
-                  <NotificationToggle notifications={notifications} />
-                  <button type="button" onClick={() => setOpen(false)} className={cn(iconButton, "hidden sm:block")} aria-label="Minimize">
-                    <Minus className="h-4 w-4" />
-                  </button>
-                  <button type="button" onClick={() => setOpen(false)} className={iconButton} aria-label="Close">
-                    <X className="h-4 w-4" />
-                  </button>
-                </header>
-                <NotificationBanner notifications={notifications} />
-
-                <form
-                  className="flex gap-2 border-b p-3"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void start();
-                  }}
-                >
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Add someone: user@example.com"
-                    aria-label="Email to chat with"
-                    className="h-9 min-w-0 flex-1 rounded-lg border bg-background/60 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!email.trim() || starting}
-                    aria-label="Start chat"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand text-white disabled:opacity-40"
-                  >
-                    {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                  </button>
-                </form>
-                <div className="flex border-b text-xs text-muted-foreground">
-                  <button
-                    type="button"
-                    onClick={() => setView("new-group")}
-                    className="flex flex-1 items-center justify-center gap-1.5 px-4 py-2 transition-colors hover:bg-muted/50 hover:text-foreground"
-                  >
-                    <Users className="h-3.5 w-3.5" />
-                    New group
-                  </button>
-                  {myEmail && (
-                    <button
-                      type="button"
-                      onClick={() => void start(myEmail)}
-                      disabled={starting}
-                      className="flex flex-1 items-center justify-center gap-1.5 border-l px-4 py-2 transition-colors hover:bg-muted/50 hover:text-foreground"
-                    >
-                      <NotebookPen className="h-3.5 w-3.5" />
-                      Notes to self
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex-1 overflow-y-auto">
-                  {chats === null ? (
-                    <div className="space-y-2 p-3">
-                      {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/40" />
-                      ))}
-                    </div>
-                  ) : chatsError ? (
-                    <p className="p-4 text-sm text-destructive">{chatsError}</p>
-                  ) : chats.length === 0 ? (
-                    <div className="flex flex-col items-center px-6 py-12 text-center">
-                      <MessagesSquare className="mb-3 h-12 w-12 text-muted-foreground/50" />
-                      <p className="text-sm font-medium">No conversations yet</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Add someone by e-mail above, or create a group.</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y">
-                      {chats.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => openConversation(c.id)}
-                          className={cn("flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50", c.id === selectedId && "bg-muted/40")}
-                        >
-                          <UserAvatar name={chatTitle(c, userId)} path={c.kind === "group" ? c.avatar_path : c.other_avatar} group={c.kind === "group"} />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-baseline gap-2">
-                              <p className={cn("min-w-0 flex-1 truncate text-sm", c.unread ? "font-semibold" : "font-medium")}>
-                                {chatTitle(c, userId)}
-                                {c.kind === "group" && <span className="ml-1 text-[11px] font-normal text-muted-foreground">· {c.member_count}</span>}
-                              </p>
-                              <span className="shrink-0 text-[11px] text-muted-foreground">{listTime(c.last_message_at)}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <p className={cn("min-w-0 flex-1 truncate text-xs", c.unread ? "text-foreground" : "text-muted-foreground")}>{messagePreview(c, userId)}</p>
-                              {c.unread > 0 && (
-                                <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-semibold text-white">
-                                  {c.unread > 99 ? "99+" : c.unread}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
+              mainPane ?? listPane
             )}
           </motion.section>
         )}

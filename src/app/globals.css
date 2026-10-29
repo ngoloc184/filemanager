@@ -247,8 +247,12 @@
   }
 }
 
-::selection {
-  background: color-mix(in oklch, var(--primary) 25%, transparent);
+/* In the base layer so `selection:` utilities (chat bubbles) can override it;
+   strong enough to see where a selection ends. */
+@layer base {
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 40%, transparent);
+  }
 }
 
 

@@ -73,18 +73,21 @@ export function MessageRow({
         <div className="w-7 shrink-0">{showSender && <UserAvatar name={sender.name} path={sender.avatar_path} size="sm" className="h-7 w-7" />}</div>
       )}
 
-      <div className={cn("flex min-w-0 max-w-[80%] flex-col", mine ? "items-end" : "items-start")}>
+      {/* narrower bubbles in the wide (expanded) chat, like Messenger */}
+      <div className={cn("flex min-w-0 max-w-[80%] flex-col @2xl:max-w-[62%]", mine ? "items-end" : "items-start")}>
         {isGroup && !mine && showSender && <p className="mb-0.5 px-1 text-[11px] font-medium text-muted-foreground">{sender.name}</p>}
 
         <div className={cn("flex items-center gap-1", mine ? "flex-row-reverse" : "flex-row")}>
           <div
             className={cn(
               "min-w-0 space-y-1 rounded-2xl px-3 py-2 text-sm shadow-sm",
+              // selected text must stand out from the bubble (the page-wide
+              // selection colour is too close to the brand gradient)
               m.deleted_at
                 ? "border border-dashed bg-background/60 italic text-muted-foreground shadow-none"
                 : mine
-                  ? "rounded-br-md bg-brand text-white"
-                  : "rounded-bl-md bg-card/95",
+                  ? "rounded-br-md bg-brand text-white selection:bg-white selection:text-[#5b21b6]"
+                  : "rounded-bl-md bg-card/95 selection:bg-primary selection:text-primary-foreground",
               mentionedMe && !mine && !m.deleted_at && "ring-2 ring-amber-400/70",
               m.pending && "opacity-80"
             )}

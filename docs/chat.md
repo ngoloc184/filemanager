@@ -4,6 +4,12 @@ Real-time messages with one person or a group, in a floating widget on every
 page (the chat button bottom-right, next to the AI Assistant; the red badge
 counts unread messages). Opening one widget closes the other.
 
+**Expand** (⤢ in the header, as in Messenger): the chat fills most of the
+screen, with the conversation list beside the open conversation on wide
+screens; ⤡ shrinks it again. The choice is remembered in this browser.
+Selected text in a message is shown in a strong colour (white on your own
+messages, the brand colour on others'), so it is clear what will be copied.
+
 ## Conversations
 
 * **Direct**: add someone by typing their e-mail at the top. Each pair of
