@@ -139,6 +139,9 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
 
   const me = useMyProfile();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  /** the user is at the end of the conversation: keep it there as pictures load */
+  const stickToBottom = useRef(true);
   // names of everyone seen so far (notifications for conversations not open)
   const knownNames = useRef(new Map<string, string>());
   const typingRef = useRef<{ typing: () => void; leave: () => void } | null>(null);
@@ -548,8 +551,36 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
 
   const lastMessageId = messages[messages.length - 1]?.id;
   useEffect(() => {
-    if (view === "thread") bottomRef.current?.scrollIntoView({ block: "end" });
+    if (view !== "thread") return;
+    stickToBottom.current = true;
+    bottomRef.current?.scrollIntoView({ block: "end" });
   }, [lastMessageId, view]);
+
+  // pictures make messages taller after they load: stay at the bottom if the
+  // user was there (scrolling up to read older messages is left alone)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    };
+    const resize = new ResizeObserver(() => {
+      if (stickToBottom.current) el.scrollTop = el.scrollHeight;
+    });
+    const observeChildren = () => {
+      resize.disconnect();
+      for (const child of Array.from(el.children)) resize.observe(child);
+    };
+    observeChildren();
+    const children = new MutationObserver(observeChildren);
+    children.observe(el, { childList: true });
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      children.disconnect();
+      resize.disconnect();
+    };
+  }, [open, view, selectedId, expanded]);
 
   // ---------------------------------------------------------------- actions
   const start = async (address = email) => {
@@ -822,7 +853,7 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
 
         <PinnedBar pins={pins} nameOf={nameOf} canPin={canPin} onJump={(id) => void jumpTo(id)} onUnpin={(id) => void pin(id, false)} />
 
-        <div className="@container relative flex-1 overflow-y-auto px-3 py-3" style={background ?? undefined}>
+        <div ref={scrollRef} className="@container relative flex-1 overflow-y-auto px-3 py-3" style={background ?? undefined}>
           {threadLoading ? (
             <div className="flex h-full items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

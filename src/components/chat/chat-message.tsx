@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { AlertCircle, ChevronDown, Copy, Loader2, Pin, PinOff, Reply, RotateCcw, SmilePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { FileBubble } from "@/components/chat/chat-file";
+import { FileBubble, inlineImage } from "@/components/chat/chat-file";
 import { UserAvatar } from "@/components/chat/user-avatar";
 import { REACTIONS, clockTime, groupReactions, mentionSegments, systemText } from "@/lib/chat-format";
 import type { ChatMessage, ChatPin } from "@/lib/services/chat";
@@ -66,6 +66,8 @@ export function MessageRow({
   const reactions = groupReactions(m.reactions, myId);
   const live = !m.deleted_at && !m.pending && !m.failed;
   const mentionedMe = m.mentions.includes(myId);
+  // a picture on its own is shown without a bubble around it (like Messenger)
+  const imageOnly = !m.deleted_at && !m.body && !m.reply_to_id && inlineImage(m);
 
   return (
     <div id={`msg-${m.id}`} className={cn("group/msg flex items-end gap-1.5", mine ? "justify-end" : "justify-start")}>
@@ -85,7 +87,9 @@ export function MessageRow({
               // selection colour is too close to the brand gradient)
               m.deleted_at
                 ? "border border-dashed bg-background/60 italic text-muted-foreground shadow-none"
-                : mine
+                : imageOnly
+                  ? "bg-transparent p-0 shadow-none"
+                  : mine
                   ? "rounded-br-md bg-brand text-white selection:bg-white selection:text-[#5b21b6]"
                   : "rounded-bl-md bg-card/95 selection:bg-primary selection:text-primary-foreground",
               mentionedMe && !mine && !m.deleted_at && "ring-2 ring-amber-400/70",
@@ -133,7 +137,13 @@ export function MessageRow({
                 )}
               </>
             )}
-            <p className={cn("flex items-center justify-end gap-1 text-[10px]", mine && !m.deleted_at ? "text-white/70" : "text-muted-foreground")}>
+            <p
+              className={cn(
+                "flex items-center justify-end gap-1 text-[10px]",
+                mine && !m.deleted_at && !imageOnly ? "text-white/70" : "text-muted-foreground",
+                imageOnly && "px-1"
+              )}
+            >
               {pinned && <Pin className="h-2.5 w-2.5" />}
               {m.pending && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
               {clockTime(m.created_at)}

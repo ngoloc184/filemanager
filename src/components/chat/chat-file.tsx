@@ -1,29 +1,85 @@
 "use client";
 
-// Files in chat messages: the file card in a bubble and "Send from My Files".
+// Files in chat messages: pictures shown in the message, the file card for
+// other files, and "Send from My Files".
 
 import { useEffect, useState } from "react";
 import { ArrowLeft, Download, Eye, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { FileTile, fileKind } from "@/components/files/file-tile";
+import { isInlineImage } from "@/lib/chat-format";
 import { searchMyFiles, type ChatMessage } from "@/lib/services/chat";
+import { useChatImageUrl } from "@/lib/services/chat-images";
 import { downloadFile, type PreviewableFile } from "@/lib/services/files";
 import { getErrorMessage, type FileRow } from "@/lib/types/database";
 import { cn, formatBytes } from "@/lib/utils";
 
 export const iconButton = "rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50";
 
+/** The message shows its picture right away (no "preview" click). */
+export function inlineImage(message: ChatMessage): boolean {
+  return Boolean(message.file_available && message.file_id && message.file_version_id && isInlineImage(message.file_mime, message.file_size));
+}
+
+function fileOf(message: ChatMessage): PreviewableFile | null {
+  return message.file_available && message.file_id
+    ? {
+        id: message.file_id,
+        name: message.file_name ?? "file",
+        current_version_id: message.file_version_id,
+        mime_type: message.file_mime ?? "application/octet-stream",
+        size: message.file_size ?? 0,
+      }
+    : null;
+}
+
+/** A picture in a message: click to open it large; download on hover. */
+function ImageBubble({ file, onPreview, onFallback }: { file: PreviewableFile; onPreview: (f: PreviewableFile) => void; onFallback: () => void }) {
+  const url = useChatImageUrl(file.current_version_id ?? null);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (url === null) onFallback();
+  }, [url, onFallback]);
+  if (url === null) return null;
+  return (
+    <div className="group/img relative w-fit max-w-full overflow-hidden rounded-xl">
+      {!loaded && <div className="h-40 w-56 max-w-full animate-pulse rounded-xl bg-muted/60" aria-hidden="true" />}
+      {url && (
+        <button type="button" onClick={() => onPreview(file)} className="block" aria-label={`Open ${file.name}`} title={file.name}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={file.name}
+            loading="lazy"
+            decoding="async"
+            onLoad={() => setLoaded(true)}
+            onError={onFallback}
+            className={cn("max-h-72 w-auto max-w-full rounded-xl object-contain", !loaded && "absolute h-0 w-0 opacity-0")}
+          />
+        </button>
+      )}
+      {loaded && (
+        <button
+          type="button"
+          onClick={() => downloadFile(file).catch((err) => toast.error(getErrorMessage(err)))}
+          className="absolute right-1.5 top-1.5 rounded-lg bg-black/55 p-1.5 text-white opacity-0 backdrop-blur transition-opacity hover:bg-black/70 focus-visible:opacity-100 group-hover/img:opacity-100"
+          aria-label={`Download ${file.name}`}
+          title="Download"
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function FileBubble({ message, mine, onPreview }: { message: ChatMessage; mine: boolean; onPreview: (f: PreviewableFile) => void }) {
-  const file: PreviewableFile | null =
-    message.file_available && message.file_id
-      ? {
-          id: message.file_id,
-          name: message.file_name ?? "file",
-          current_version_id: message.file_version_id,
-          mime_type: message.file_mime ?? "application/octet-stream",
-          size: message.file_size ?? 0,
-        }
-      : null;
+  const file = fileOf(message);
+  // a picture that cannot be shown (link or decoding failed) becomes a file card
+  const [asCard, setAsCard] = useState(false);
+  if (file && !asCard && inlineImage(message)) {
+    return <ImageBubble file={file} onPreview={onPreview} onFallback={() => setAsCard(true)} />;
+  }
   return (
     <div className={cn("flex w-60 max-w-full items-center gap-2.5 rounded-xl border p-2", mine ? "border-white/20 bg-white/10" : "bg-background/70")}>
       <FileTile kind={fileKind(message.file_mime, message.file_name ?? "")} size="sm" className={mine ? "bg-white/15 text-white ring-white/25" : undefined} />

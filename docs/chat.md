@@ -36,6 +36,10 @@ messages, the brand colour on others'), so it is clear what will be copied.
   your **Chat** folder). Everyone in the conversation gets view access to a
   file you send; an existing share is never reduced. Only files you own or
   manage can be sent.
+* **Pictures** (JPG, PNG, GIF, WebP, AVIF, SVG, BMP up to 10 MB) are shown
+  in the message itself; click one to open it large, hover for download.
+  Larger or other image types (HEIC, TIFF) show the usual file card. Links
+  for all pictures on screen are requested together and reused for an hour.
 * **Instant**: a message is shown the moment you press Enter and confirmed by
   the server a moment later (spinner); sends go out in order. If one fails it
   says “Not sent · Retry”.

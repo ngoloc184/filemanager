@@ -156,6 +156,16 @@ export function mentionSegments(body: string, people: { id: string; name: string
   return segments;
 }
 
+// ---------------------------------------------------------------- images
+
+const INLINE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif", "image/svg+xml", "image/bmp"];
+export const INLINE_IMAGE_MAX = 10 * 1024 * 1024;
+
+/** Shown in the message itself (no preview click): images browsers draw, up to 10 MB. */
+export function isInlineImage(mime: string | null | undefined, size: number | null | undefined): boolean {
+  return Boolean(mime && INLINE_IMAGE_TYPES.includes(mime) && size !== null && size !== undefined && size <= INLINE_IMAGE_MAX);
+}
+
 // ---------------------------------------------------------------- permissions
 
 /** Name, picture, background and pins: everyone, unless restricted to owner/admins. */

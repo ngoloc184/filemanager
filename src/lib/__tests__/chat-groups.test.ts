@@ -7,6 +7,7 @@ import {
   chatTitle,
   filterMembers,
   groupReactions,
+  isInlineImage,
   mentionQuery,
   mentionSegments,
   mergeMessages,
@@ -126,6 +127,19 @@ describe("timestamps", () => {
       [{ id: "a", created_at: "2026-10-24T08:00:00.123456+00:00" }]
     );
     assert.deepEqual(merged.map((m) => m.id), ["a", "b"]);
+  });
+});
+
+describe("inline images", () => {
+  it("shows images browsers can draw, up to 10 MB", () => {
+    assert.equal(isInlineImage("image/jpeg", 2_000_000), true);
+    assert.equal(isInlineImage("image/png", 10 * 1024 * 1024), true);
+    assert.equal(isInlineImage("image/webp", 10 * 1024 * 1024 + 1), false);
+    assert.equal(isInlineImage("image/heic", 1000), false);
+    assert.equal(isInlineImage("image/tiff", 1000), false);
+    assert.equal(isInlineImage("application/pdf", 1000), false);
+    assert.equal(isInlineImage(null, 1000), false);
+    assert.equal(isInlineImage("image/gif", null), false);
   });
 });
 
