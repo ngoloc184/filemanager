@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { notificationContent, notifyChannels } from "../chat-notify.ts";
+import { chatPushPayload, notificationContent, notifyChannels } from "../chat-notify.ts";
 
 const base = {
   event: "INSERT",
@@ -19,14 +19,15 @@ describe("notifyChannels", () => {
     assert.deepEqual(notifyChannels({ ...base, event: "DELETE" }), { toast: false, system: false });
   });
 
-  it("uses the in-app toast while the user is looking at the app", () => {
-    assert.deepEqual(notifyChannels(base), { toast: true, system: false });
+  it("notifies the device even while the app is in use, unless that conversation is on screen", () => {
+    assert.deepEqual(notifyChannels(base), { toast: true, system: true });
     assert.deepEqual(notifyChannels({ ...base, onScreen: true }), { toast: false, system: false });
+    // the conversation is open but the tab is in the background
+    assert.deepEqual(notifyChannels({ ...base, pageActive: false, onScreen: true }), { toast: false, system: true });
   });
 
-  it("uses a system notification when the tab is hidden or the window is not focused", () => {
-    assert.deepEqual(notifyChannels({ ...base, pageActive: false }), { toast: true, system: true });
-    assert.deepEqual(notifyChannels({ ...base, pageActive: false, onScreen: true }), { toast: false, system: true });
+  it("leaves device notifications to Web Push when this browser is subscribed", () => {
+    assert.deepEqual(notifyChannels({ ...base, pushActive: true }), { toast: true, system: false });
   });
 
   it("respects the account switch and the browser permission", () => {
@@ -62,9 +63,28 @@ describe("notificationContent", () => {
     });
   });
 
+  it("describes stickers", () => {
+    assert.equal(notificationContent({ senderEmail: "Bob", body: null, fileName: null, sticker: true }).body, "Sent a sticker");
+    assert.equal(notificationContent({ senderEmail: "Bob", body: null, fileName: null, sticker: true, group: "Team" }).body, "Bob: Sent a sticker");
+  });
+
   it("keeps long messages short", () => {
     const { body } = notificationContent({ senderEmail: "a@b.co", body: "x".repeat(500), fileName: null });
     assert.ok(body.length <= 140);
     assert.ok(body.endsWith("…"));
+  });
+});
+
+describe("chatPushPayload", () => {
+  it("builds what the service worker shows, per recipient", () => {
+    const message = { id: "m1", conversation_id: "c1", body: "Chào @Alice", file_name: null, mentions: ["alice"] };
+    assert.deepEqual(chatPushPayload({ message, senderName: "Bob", group: "Team", recipientId: "alice" }), {
+      title: "Team",
+      body: "Bob mentioned you: Chào @Alice",
+      tag: "chat-m1",
+      conversationId: "c1",
+    });
+    assert.equal(chatPushPayload({ message, senderName: "Bob", group: "Team", recipientId: "carol" }).body, "Bob: Chào @Alice");
+    assert.equal(chatPushPayload({ message, senderName: "Bob", group: null, recipientId: "carol" }).title, "Bob");
   });
 });

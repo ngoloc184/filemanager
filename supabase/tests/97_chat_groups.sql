@@ -131,6 +131,21 @@ select pg_temp.check(
    from public.list_chat_messages(current_setting('test.g')::uuid) where body = 'Trả lời Alice'),
   'a reply shows the message it answers');
 
+-- stickers
+select set_config('test.sticker', public.send_chat_message(current_setting('test.g')::uuid, null, null, null, null, null, 'thumbs-up')::text, true);
+select pg_temp.check(
+  (select meta ->> 'sticker' = 'thumbs-up' and body is null from public.list_chat_messages(current_setting('test.g')::uuid)
+   where id = current_setting('test.sticker')::uuid),
+  'a sticker message keeps its sticker id');
+select pg_temp.check(
+  pg_temp.error_of(format('select public.send_chat_message(%L, null, null, null, null, null, %L)', current_setting('test.g'), '../evil')) is not null,
+  'unknown sticker ids are refused');
+select public.delete_chat_message(current_setting('test.sticker')::uuid);
+select pg_temp.check(
+  (select meta is null and deleted_at is not null from public.list_chat_messages(current_setting('test.g')::uuid)
+   where id = current_setting('test.sticker')::uuid),
+  'an unsent sticker is gone');
+
 -- reactions: one per person, the same emoji again removes it
 select public.react_chat_message('e0000000-0000-0000-0000-000000000001', '❤️');
 select public.react_chat_message('e0000000-0000-0000-0000-000000000001', '😆');
@@ -155,7 +170,7 @@ select public.pin_chat_message('e0000000-0000-0000-0000-000000000001');
 select pg_temp.check((select count(*) from public.list_chat_pins(current_setting('test.g')::uuid)) = 1,
   'a member pins a message');
 select public.pin_chat_message(id) from public.list_chat_messages(current_setting('test.g')::uuid)
-where kind = 'message' and id <> 'e0000000-0000-0000-0000-000000000001';
+where kind = 'message' and deleted_at is null and id <> 'e0000000-0000-0000-0000-000000000001';
 select pg_temp.check((select count(*) from public.list_chat_pins(current_setting('test.g')::uuid)) = 3,
   'three messages can be pinned');
 select pg_temp.login(:A);

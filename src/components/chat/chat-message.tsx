@@ -7,6 +7,7 @@ import { useState } from "react";
 import { AlertCircle, ChevronDown, Copy, Loader2, Pin, PinOff, Reply, RotateCcw, SmilePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { FileBubble, inlineImage } from "@/components/chat/chat-file";
+import { StickerImage } from "@/components/chat/sticker-picker";
 import { UserAvatar } from "@/components/chat/user-avatar";
 import { REACTIONS, clockTime, groupReactions, mentionSegments, systemText } from "@/lib/chat-format";
 import type { ChatMessage, ChatPin } from "@/lib/services/chat";
@@ -66,8 +67,9 @@ export function MessageRow({
   const reactions = groupReactions(m.reactions, myId);
   const live = !m.deleted_at && !m.pending && !m.failed;
   const mentionedMe = m.mentions.includes(myId);
-  // a picture on its own is shown without a bubble around it (like Messenger)
-  const imageOnly = !m.deleted_at && !m.body && !m.reply_to_id && inlineImage(m);
+  const sticker = !m.deleted_at ? m.meta?.sticker ?? null : null;
+  // a picture or sticker on its own is shown without a bubble around it (like Messenger)
+  const imageOnly = !m.deleted_at && !m.body && !m.reply_to_id && (inlineImage(m) || Boolean(sticker));
 
   return (
     <div id={`msg-${m.id}`} className={cn("group/msg flex items-end gap-1.5", mine ? "justify-end" : "justify-start")}>
@@ -116,6 +118,7 @@ export function MessageRow({
                   </button>
                 )}
                 {m.file_name && <FileBubble message={m} mine={mine} onPreview={onPreview} />}
+                {sticker && <StickerImage id={sticker} alt="Sticker" className="h-28 w-28 drop-shadow-md" />}
                 {m.body && (
                   <p className="whitespace-pre-wrap break-words">
                     {mentionSegments(m.body, people).map((part, i) =>

@@ -47,6 +47,7 @@ describe("previews in groups", () => {
   it("names the sender and explains system messages", () => {
     assert.equal(messagePreview({ ...base, last_body: "hi" }, "me"), "Bob: hi");
     assert.equal(messagePreview({ ...base, last_sender_id: "me", last_body: "ok" }, "me"), "You: ok");
+    assert.equal(messagePreview({ ...base, last_meta: { sticker: "thumbs-up" } }, "me"), "Bob: Sticker");
     assert.equal(
       messagePreview({ ...base, last_kind: "system", last_meta: { type: "rename", title: "Team" } }, "me"),
       'Bob renamed the group to "Team"'

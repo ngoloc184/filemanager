@@ -1,11 +1,15 @@
 "use client";
 
-// Message box: text with @mentions and emoji, reply preview, files.
+// Message box: text with @mentions and emoji, stickers (picker and Zalo-style
+// suggestions while typing), reply preview, files.
 
 import { useMemo, useRef, useState } from "react";
-import { FolderOpen, Loader2, Paperclip, Reply, SendHorizontal, Smile, X } from "lucide-react";
+import { FolderOpen, Loader2, Paperclip, Reply, SendHorizontal, Smile, Sticker as StickerIcon, X } from "lucide-react";
 import { iconButton } from "@/components/chat/chat-file";
+import { StickerImage, StickerPicker } from "@/components/chat/sticker-picker";
 import { UserAvatar } from "@/components/chat/user-avatar";
+import { rememberSticker, useStickers } from "@/lib/stickers/load";
+import { suggestStickers } from "@/lib/stickers/suggest";
 import { activeMentions, filterMembers, mentionQuery } from "@/lib/chat-format";
 import type { ChatMessage } from "@/lib/services/chat";
 import { cn } from "@/lib/utils";
@@ -25,6 +29,7 @@ export function Composer({
   replyName,
   onCancelReply,
   onSend,
+  onSendSticker,
   onTyping,
   onUpload,
   onPickFile,
@@ -35,6 +40,7 @@ export function Composer({
   replyName: string;
   onCancelReply: () => void;
   onSend: (text: string, mentions: string[]) => void;
+  onSendSticker: (id: string) => void;
   onTyping: () => void;
   onUpload: (files: File[]) => void;
   onPickFile: () => void;
@@ -44,13 +50,20 @@ export function Composer({
   const [caret, setCaret] = useState(0);
   const [picked, setPicked] = useState<{ id: string; name: string }[]>([]);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [stickerOpen, setStickerOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  // the sticker list loads the first time it is needed
+  const stickers = useStickers(stickerOpen || draft.trim().length > 0);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
 
   const query = members.length ? mentionQuery(draft, caret) : null;
   const suggestions = useMemo(() => (query ? filterMembers(members, query.query).slice(0, 6) : []), [members, query]);
   const showMentions = suggestions.length > 0;
+  const stickerHints = useMemo(
+    () => (stickers && !showMentions && !emojiOpen && !stickerOpen ? suggestStickers(draft, stickers) : []),
+    [stickers, draft, showMentions, emojiOpen, stickerOpen]
+  );
 
   const syncCaret = () => setCaret(textRef.current?.selectionStart ?? draft.length);
 
@@ -70,6 +83,19 @@ export function Composer({
     insertAt(`@${m.name} `, query.start, caret);
     setPicked((prev) => (prev.some((p) => p.id === m.user_id) ? prev : [...prev, { id: m.user_id, name: m.name }]));
     setHighlight(0);
+  };
+
+  const sendSticker = (id: string, fromHint = false) => {
+    onSendSticker(id);
+    rememberSticker(id);
+    setStickerOpen(false);
+    // like Zalo: the words a suggested sticker replaces are not sent as well
+    if (fromHint) {
+      setDraft("");
+      setPicked([]);
+      setCaret(0);
+    }
+    requestAnimationFrame(() => textRef.current?.focus());
   };
 
   const send = () => {
@@ -95,11 +121,33 @@ export function Composer({
           <Reply className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
           <div className="min-w-0 flex-1">
             <p className="font-medium">Replying to {replyName}</p>
-            <p className="truncate text-muted-foreground">{replyTo.body ?? (replyTo.file_name ? `📎 ${replyTo.file_name}` : "")}</p>
+            <p className="truncate text-muted-foreground">
+              {replyTo.body ?? (replyTo.file_name ? `📎 ${replyTo.file_name}` : replyTo.meta?.sticker ? "Sticker" : "")}
+            </p>
           </div>
           <button type="button" onClick={onCancelReply} className="rounded p-0.5 hover:bg-muted" aria-label="Cancel reply">
             <X className="h-3.5 w-3.5" />
           </button>
+        </div>
+      )}
+
+      {stickerOpen && <StickerPicker stickers={stickers} onPick={(id) => sendSticker(id)} onClose={() => setStickerOpen(false)} />}
+
+      {stickerHints.length > 0 && (
+        <div className="absolute bottom-full left-2.5 right-2.5 mb-1 flex gap-1 overflow-x-auto rounded-2xl border bg-popover/95 p-1.5 shadow-xl backdrop-blur" aria-label="Suggested stickers">
+          {stickerHints.map((sticker) => (
+            <button
+              key={sticker.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => sendSticker(sticker.id, true)}
+              className="h-14 w-14 shrink-0 rounded-xl p-1 transition-transform hover:scale-110 hover:bg-muted/60"
+              title={`Send ${sticker.name}`}
+              aria-label={`Send sticker ${sticker.name}`}
+            >
+              <StickerImage id={sticker.id} className="h-full w-full" />
+            </button>
+          ))}
         </div>
       )}
 
@@ -163,13 +211,29 @@ export function Composer({
         </button>
         <button
           type="button"
-          onClick={() => setEmojiOpen((o) => !o)}
+          onClick={() => {
+            setEmojiOpen((o) => !o);
+            setStickerOpen(false);
+          }}
           className={cn(iconButton, emojiOpen && "bg-muted text-foreground")}
           title="Emoji"
           aria-label="Emoji"
           aria-expanded={emojiOpen}
         >
           <Smile className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setStickerOpen((o) => !o);
+            setEmojiOpen(false);
+          }}
+          className={cn(iconButton, stickerOpen && "bg-muted text-foreground")}
+          title="Stickers"
+          aria-label="Stickers"
+          aria-expanded={stickerOpen}
+        >
+          <StickerIcon className="h-4 w-4" />
         </button>
         <textarea
           ref={textRef}
@@ -197,7 +261,8 @@ export function Composer({
               }
             }
             if (e.key === "Escape") {
-              if (emojiOpen) setEmojiOpen(false);
+              if (stickerOpen) setStickerOpen(false);
+              else if (emojiOpen) setEmojiOpen(false);
               else if (replyTo) onCancelReply();
               return;
             }

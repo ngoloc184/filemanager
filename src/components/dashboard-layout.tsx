@@ -20,6 +20,7 @@ import { ChatWidget } from "@/components/chat/chat-widget";
 import { UserAvatar } from "@/components/chat/user-avatar";
 import { ProfileDialog } from "@/components/profile/profile-dialog";
 import { useMyProfile } from "@/lib/services/profile";
+import { removePushSubscription } from "@/lib/push-client";
 import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
@@ -187,6 +188,8 @@ export default function DashboardLayout({
 
   const handleLogout = async () => {
     clearAssistantHistory();
+    // this browser must not keep receiving this account's messages
+    await removePushSubscription();
     await createClient().auth.signOut();
     toast.success("Signed out");
     router.push("/login");

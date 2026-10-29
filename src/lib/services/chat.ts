@@ -4,6 +4,7 @@ import { createFolder, listFolders } from "@/lib/services/folders";
 import { createUploadTasks, uploadOne } from "@/lib/services/uploads";
 import { getErrorMessage, type FileRow } from "@/lib/types/database";
 import type { SystemMeta } from "@/lib/chat-format";
+import { pushMessage } from "@/lib/push-client";
 
 export type ChatRole = "owner" | "admin" | "member";
 
@@ -128,7 +129,7 @@ export async function sendMessage(
   conversationId: string,
   body: string | null,
   fileId: string | null = null,
-  options: { id?: string; replyTo?: string | null; mentions?: string[] } = {}
+  options: { id?: string; replyTo?: string | null; mentions?: string[]; sticker?: string } = {}
 ): Promise<string> {
   const { data, error } = await createClient().rpc("send_chat_message", {
     p_conversation_id: conversationId,
@@ -137,8 +138,11 @@ export async function sendMessage(
     p_reply_to: options.replyTo ?? null,
     p_mentions: options.mentions?.length ? options.mentions : null,
     p_id: options.id ?? null,
+    p_sticker: options.sticker ?? null,
   });
   if (error) throw chatError(error);
+  // devices of the other members (Web Push, also with their app closed)
+  pushMessage(data as string);
   return data as string;
 }
 

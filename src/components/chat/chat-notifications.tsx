@@ -1,13 +1,15 @@
 "use client";
 
-// System notifications for new chat messages: the account switch (stored in
-// user_preferences), this browser's permission, the bell button and a banner
-// when the account has them on but this device has not allowed them yet.
+// Device notifications for new chat messages: the account switch (stored in
+// user_preferences), this browser's permission and Web Push subscription, the
+// bell button, a banner when the account has them on but this device has not
+// allowed them yet, and a prompt after sign-in that asks once a week.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, BellOff, Loader2 } from "lucide-react";
+import { Bell, BellOff, BellRing, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { NotifyPermission } from "@/lib/chat-notify";
+import { ensurePushSubscription } from "@/lib/push-client";
 import { getChatNotifications, setChatNotifications } from "@/lib/services/preferences";
 import {
   notificationPermission,
@@ -19,6 +21,16 @@ import { cn } from "@/lib/utils";
 
 const BLOCKED = "Notifications are blocked for this site. Allow them in your browser's site settings, then try again.";
 const UNSUPPORTED = "This browser can't show notifications. On iPhone, add this site to the Home Screen first.";
+const SNOOZE_KEY = "fm:notify-prompt-snoozed-until";
+const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function snoozed(): boolean {
+  try {
+    return Number(window.localStorage.getItem(SNOOZE_KEY) ?? 0) > Date.now();
+  } catch {
+    return false;
+  }
+}
 
 export type ChatNotifications = ReturnType<typeof useChatNotifications>;
 
@@ -26,21 +38,32 @@ export function useChatNotifications(userId: string) {
   const [enabled, setEnabled] = useState(false);
   const [permission, setPermission] = useState<NotifyPermission>("unsupported");
   const [saving, setSaving] = useState(false);
+  /** this device has a Web Push subscription (notifications also with the app closed) */
+  const [push, setPush] = useState(false);
+  const [promptOpen, setPromptOpen] = useState(false);
   // read by realtime callbacks that outlive a render
-  const live = useRef({ enabled });
+  const live = useRef({ enabled, push });
   useEffect(() => {
-    live.current = { enabled };
-  }, [enabled]);
+    live.current = { enabled, push };
+  }, [enabled, push]);
 
   useEffect(() => {
     let cancelled = false;
+    const current = notificationPermission();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPermission(notificationPermission());
+    setPermission(current);
+    // after sign-in: offer notifications once a week until the browser was asked
+    setPromptOpen(current === "default" && !snoozed());
     getChatNotifications(userId)
-      .then((on) => {
+      .then(async (on) => {
         if (cancelled) return;
         setEnabled(on);
-        if (on && notificationPermission() === "granted") void notificationWorker();
+        if (on && notificationPermission() === "granted") {
+          void notificationWorker();
+          // renew this device's subscription for the signed-in account
+          const subscribed = await ensurePushSubscription();
+          if (!cancelled) setPush(subscribed);
+        }
       })
       .catch(() => undefined);
     // the permission can change in the browser's settings while the app is open
@@ -80,8 +103,10 @@ export function useChatNotifications(userId: string) {
   const allowHere = useCallback(async () => {
     const result = await requestNotificationPermission();
     setPermission(result);
+    setPromptOpen(false);
     if (result === "granted") {
       void notificationWorker();
+      void ensurePushSubscription().then(setPush);
       return true;
     }
     toast.error(result === "unsupported" ? UNSUPPORTED : BLOCKED);
@@ -95,10 +120,37 @@ export function useChatNotifications(userId: string) {
     }
     // ask first: the permission prompt only works directly after the click
     if (notificationPermission() !== "granted" && !(await allowHere())) return;
-    if (await save(true)) toast.success("Chat notifications are on. New messages show up even when this tab is in the background.");
+    if (!(await save(true))) return;
+    const subscribed = await ensurePushSubscription();
+    setPush(subscribed);
+    toast.success(
+      subscribed
+        ? "Chat notifications are on for this device, also when the app is closed."
+        : "Chat notifications are on. They show up while the app is open in a tab."
+    );
   }, [enabled, save, allowHere]);
 
-  return { enabled, permission, saving, toggle, allowHere, live };
+  /** "Later": ask again in a week. */
+  const snooze = useCallback(() => {
+    setPromptOpen(false);
+    try {
+      window.localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_MS));
+    } catch {
+      // not remembered: asked again next visit
+    }
+  }, []);
+
+  /** "Turn on" in the prompt: permission, account switch and push in one click. */
+  const enableFromPrompt = useCallback(async () => {
+    setPromptOpen(false);
+    if (enabled) {
+      if (await allowHere()) setPush(await ensurePushSubscription());
+      return;
+    }
+    await toggle();
+  }, [enabled, allowHere, toggle]);
+
+  return { enabled, permission, saving, push, promptOpen, toggle, allowHere, snooze, enableFromPrompt, live };
 }
 
 /** Bell in the chat header: turns system notifications on or off for the account. */
@@ -144,6 +196,46 @@ export function NotificationBanner({ notifications }: { notifications: ChatNotif
       ) : (
         <p className="min-w-0 flex-1">{permission === "denied" ? BLOCKED : UNSUPPORTED}</p>
       )}
+    </div>
+  );
+}
+
+/** After sign-in: "Turn on message notifications on this device?" */
+export function NotificationPrompt({ notifications, hidden }: { notifications: ChatNotifications; hidden?: boolean }) {
+  const { promptOpen, permission, snooze, enableFromPrompt } = notifications;
+  if (!promptOpen || permission !== "default" || hidden) return null;
+  return (
+    <div
+      role="dialog"
+      aria-label="Message notifications"
+      className="fixed bottom-24 right-5 z-[61] w-[min(22rem,calc(100vw-2.5rem))] rounded-2xl border bg-popover/95 p-4 shadow-2xl backdrop-blur-xl"
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand text-white shadow-lg shadow-primary/30">
+          <BellRing className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">Get notified of new messages?</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Messages show up on this device like in other chat apps, also when this site is closed. Your browser will ask for permission.
+          </p>
+        </div>
+        <button type="button" onClick={snooze} className="rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Not now">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="mt-3 flex justify-end gap-2">
+        <button type="button" onClick={snooze} className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
+          Later
+        </button>
+        <button
+          type="button"
+          onClick={() => void enableFromPrompt()}
+          className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-md shadow-primary/30"
+        >
+          Turn on
+        </button>
+      </div>
     </div>
   );
 }

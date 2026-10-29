@@ -9,7 +9,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 - **Comments**: Multi-line comment threads on every file and folder (anyone who can view an item can comment; authors edit their own, owners can remove any)
 - **Text editor**: Create a `.txt` file directly in a folder, or edit small text files (each save becomes a new version)
 - **Saved links**: A private list of useful URLs with a title (e.g. “Daily progress update”)
-- **Chat**: Real-time direct and group messages; text, files, emoji, replies, @mentions, reactions, pinned messages, typing and “Seen”; groups with owner/admin roles, picture and background; display names and profile pictures; optional system notifications ([docs/chat.md](docs/chat.md))
+- **Chat**: Real-time direct and group messages; text, files, emoji, stickers with Zalo-style suggestions, replies, @mentions, reactions, pinned messages, typing and “Seen”; groups with owner/admin roles, picture and background; display names and profile pictures; Web Push notifications on the device, also with the site closed ([docs/chat.md](docs/chat.md))
 - **AI Agent**: Talk to your files in the chat (“Thêm file Hợp đồng.docx vào thư mục Kế toán”, “Xem thùng rác”, “Lưu link …”); asks for missing details, confirms every change, and learns new phrasings from all users — no LLM required ([docs/ai-agent.md](docs/ai-agent.md))
 - **File Management**: Download, view, and delete individual files
 - **Search**: Search through batches and files
@@ -42,7 +42,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280027...`)
+   (`202608280001...` through `202608280029...`)
 4. Migrate existing batch data into the new file system (idempotent, safe to re-run):
 
    ```sql
@@ -264,3 +264,8 @@ This is a standard Next.js app and can be deployed to any platform that supports
 ## License
 
 MIT
+
+## Third-party assets
+
+Chat stickers: [Microsoft Fluent Emoji](https://github.com/microsoft/fluentui-emoji),
+© Microsoft Corporation, MIT License (see `public/stickers/fluent/LICENSE.txt`).

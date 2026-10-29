@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Check, CheckCheck, Info, Loader2, Maximize2, MessagesSquare, Minimize2, Minus, NotebookPen, Plus, Users, X } from "lucide-react";
 import { PreviewDialog } from "@/components/files/file-dialogs";
 import { announceWidget, onOtherWidget } from "@/components/floating-widgets";
-import { NotificationBanner, NotificationToggle, useChatNotifications } from "@/components/chat/chat-notifications";
+import { NotificationBanner, NotificationPrompt, NotificationToggle, useChatNotifications } from "@/components/chat/chat-notifications";
 import { Composer, type MentionCandidate } from "@/components/chat/chat-composer";
 import { FilePicker, iconButton } from "@/components/chat/chat-file";
 import { InfoView, NewGroupView } from "@/components/chat/chat-group";
@@ -356,6 +356,7 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
           pageActive: pageActive(),
           enabled: notifications.live.current.enabled,
           permission: notificationPermission(),
+          pushActive: notifications.live.current.push,
         });
         if (!channels.toast && !channels.system) return;
         void describe(row)
@@ -394,6 +395,17 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
     }
     return onNotificationClick(openConversation);
   }, [openConversation]);
+
+  useEffect(() => {
+    // tell the service worker which conversation is on screen: a push for it
+    // is not shown while the user is reading it
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const conversationId = open && view !== "list" ? selectedId : null;
+    const report = () => navigator.serviceWorker.controller?.postMessage({ type: "chat-state", conversationId });
+    report();
+    navigator.serviceWorker.addEventListener("controllerchange", report);
+    return () => navigator.serviceWorker.removeEventListener("controllerchange", report);
+  }, [open, view, selectedId]);
 
   useEffect(() => {
     // the list is loaded when the panel opens
@@ -608,7 +620,7 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
     (conversationId: string, m: ChatMessage) => {
       sendQueue.current = sendQueue.current.then(async () => {
         try {
-          await sendMessage(conversationId, m.body, null, { id: m.id, replyTo: m.reply_to_id, mentions: m.mentions });
+          await sendMessage(conversationId, m.body, null, { id: m.id, replyTo: m.reply_to_id, mentions: m.mentions, sticker: m.meta?.sticker });
           patchMessage(m.id, { pending: false, failed: false });
         } catch (err) {
           // a retry of a message that did reach the server
@@ -626,15 +638,16 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
     [patchMessage, loadChats]
   );
 
-  const send = (text: string, mentions: string[]) => {
+  /** Text or a sticker: shown at once, then sent in order. */
+  const post = (content: { body: string | null; mentions?: string[]; sticker?: string }) => {
     if (!selectedId) return;
     const m: ChatMessage = {
       id: newId(),
       sender_id: userId,
       kind: "message",
-      meta: null,
-      body: text,
-      mentions,
+      meta: content.sticker ? { sticker: content.sticker } : null,
+      body: content.body,
+      mentions: content.mentions ?? [],
       file_id: null,
       file_name: null,
       file_size: null,
@@ -658,6 +671,9 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
     setReplyTo(null);
     deliver(selectedId, m);
   };
+
+  const send = (text: string, mentions: string[]) => post({ body: text, mentions });
+  const sendSticker = (id: string) => post({ body: null, sticker: id });
 
   const retry = (m: ChatMessage) => {
     if (!selectedId) return;
@@ -965,6 +981,7 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
           replyName={replyTo ? nameOf(replyTo.sender_id) : ""}
           onCancelReply={() => setReplyTo(null)}
           onSend={send}
+          onSendSticker={sendSticker}
           onTyping={() => typingRef.current?.typing()}
           onUpload={(files) => void sendFiles(files)}
           onPickFile={() => setView("picker")}
@@ -1131,6 +1148,8 @@ export function ChatWidget({ userId, email: myEmail }: { userId: string; email?:
           </motion.button>
         )}
       </AnimatePresence>
+
+      <NotificationPrompt notifications={notifications} hidden={open} />
 
       {/* Panel */}
       <AnimatePresence>

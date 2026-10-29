@@ -22,6 +22,7 @@ export function messagePreview(c: ChatPreviewInput, myId: string): string {
   if (c.last_deleted) return `${who}Message unsent`;
   if (c.last_body) return `${who}${c.last_body.replace(/\s+/g, " ").trim().slice(0, 120)}`;
   if (c.last_file_name) return `${who}📎 ${c.last_file_name}`;
+  if (c.last_meta?.sticker) return `${who}Sticker`;
   return "";
 }
 
@@ -51,6 +52,8 @@ export type SystemMeta = {
   role?: string;
   value?: boolean;
   message_id?: string;
+  /** sticker messages (kind "message"): the sticker id */
+  sticker?: string;
 };
 
 /** "Bob renamed the group to …": what a system message records. */
