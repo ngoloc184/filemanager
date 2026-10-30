@@ -11,13 +11,15 @@ import { CheckInbox } from "@/components/auth/check-inbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PASSWORD_MIN, authErrorMessage, confirmRedirect, passwordProblem } from "@/lib/auth-links";
+import { PASSWORD_MIN, authErrorMessage, confirmRedirect, nextFromSearch, passwordProblem, withNext } from "@/lib/auth-links";
 
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   // "/register?verify=<email>": an account that still has to click its link (from sign-in)
   const verifyEmail = searchParams.get("verify");
+  // where to continue once the account is confirmed (e.g. an invitation link)
+  const next = nextFromSearch(searchParams);
 
   const [step, setStep] = useState<"details" | "inbox">(verifyEmail ? "inbox" : "details");
   const [email, setEmail] = useState(verifyEmail ?? "");
@@ -25,14 +27,14 @@ function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  /** from sign-in nothing was sent in this visit yet; from /setup (?sent=1) it was */
+  /** from sign-in nothing was sent in this visit yet; with ?sent=1 it was */
   const [sent, setSent] = useState(!verifyEmail || searchParams.get("sent") === "1");
 
   const resend = async () => {
     const { error } = await createClient().auth.resend({
       type: "signup",
       email: email.trim(),
-      options: { emailRedirectTo: confirmRedirect(window.location.origin, "signup") },
+      options: { emailRedirectTo: confirmRedirect(window.location.origin, "signup", next) },
     });
     if (error) throw error;
     setSent(true);
@@ -49,7 +51,7 @@ function RegisterForm() {
     const { data, error } = await createClient().auth.signUp({
       email: email.trim(),
       password,
-      options: { emailRedirectTo: confirmRedirect(window.location.origin, "signup") },
+      options: { emailRedirectTo: confirmRedirect(window.location.origin, "signup", next) },
     });
     setLoading(false);
     if (error) {
@@ -59,7 +61,7 @@ function RegisterForm() {
     if (data.session) {
       // e-mail confirmation is turned off on the server: signed in already
       toast.success("Account created successfully!");
-      router.push("/dashboard");
+      router.push(next ?? "/dashboard");
       router.refresh();
       return;
     }
@@ -81,7 +83,7 @@ function RegisterForm() {
         footer={
           <>
             Already confirmed?{" "}
-            <Link href="/login" className="font-medium text-primary hover:underline">
+            <Link href={withNext("/login", next)} className="font-medium text-primary hover:underline">
               Sign in
             </Link>
             {" · "}
@@ -89,7 +91,7 @@ function RegisterForm() {
               type="button"
               onClick={() => {
                 setStep("details");
-                router.replace("/register");
+                router.replace(withNext("/register", next));
               }}
               className="font-medium text-primary hover:underline"
             >
@@ -111,7 +113,7 @@ function RegisterForm() {
       footer={
         <>
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-primary hover:underline">
+          <Link href={withNext("/login", next)} className="font-medium text-primary hover:underline">
             Sign in
           </Link>
         </>

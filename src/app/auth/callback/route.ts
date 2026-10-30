@@ -18,12 +18,12 @@ export async function GET(request: NextRequest) {
   const flowId = searchParams.get("sb_flow_id");
   const go = (path: string) => NextResponse.redirect(new URL(path, origin));
 
-  if (!code) return go(failurePath(flow, "invalid"));
+  if (!code) return go(failurePath(flow, "invalid", searchParams.get("next")));
   const supabase = await createClient();
   const { error } = await supabase.auth.exchangeCodeForSession(code, flowId ? { flowId } : undefined);
   if (error) {
     const expired = /expired/.test(error.code ?? "") ? (error.code ?? null) : null;
-    return go(failurePath(flow, failedOutcome({ flow, hadCode: !expired, errorCode: expired })));
+    return go(failurePath(flow, failedOutcome({ flow, hadCode: !expired, errorCode: expired }), searchParams.get("next")));
   }
   return go(safeNext(searchParams.get("next"), FLOW_NEXT[flow ?? "signup"]));
 }

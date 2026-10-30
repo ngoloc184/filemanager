@@ -130,7 +130,7 @@ export default function SharedClient({ userId }: { userId: string }) {
                 className="h-8 w-8 p-0 shrink-0"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setCommentsTarget({ kind: item.item_type, id: item.id, name: item.name, isOwner: false });
+                  setCommentsTarget({ kind: item.item_type, id: item.id, name: item.name, role: item.role });
                 }}
                 aria-label={`Comments on ${item.name}`}
               >

@@ -42,7 +42,23 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280029...`)
+   (`202608280001...` through `202608280035...`). The 030–035 set hardens
+   security and adds the company layer:
+   - `030_security_hardening`: drops the legacy storage policies, removes
+     anonymous access to internal functions and limits push endpoints to
+     the known browser push services;
+   - `031_ownership_safety`: a move can no longer hand admin rights to a new
+     person, and an account that still owns files cannot be deleted;
+   - `032_chat_file_grants`: files shared through chat are unshared again on
+     remove, leave, unsend and disband;
+   - `033_folder_listing_roles`: My Files lists only your own items and every
+     item carries your role;
+   - `034_organizations`: companies, departments, positions, roles and
+     invitations;
+   - `035_notifications`: the notification center.
+
+   Deleting a user who still owns files now fails. Offboard them from the
+   organization first, so their files are handed over.
 4. Migrate existing batch data into the new file system (idempotent, safe to re-run):
 
    ```sql
@@ -67,7 +83,7 @@ optionally apply the any-device link templates with
 1. In Supabase dashboard, go to **Authentication > Users**
 2. Click **Add User** > **Create new user**
 3. Enter an email and password
-4. Or use the `/setup` page in the app to create one
+4. Or sign up through `/register` (the old `/setup` page now redirects there)
 
 ### 5. Configure Environment Variables
 

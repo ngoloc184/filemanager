@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import { AnimatePresence, motion } from "motion/react";
@@ -19,6 +27,7 @@ import {
   Grid3x3,
   Info,
   List,
+  Loader2,
   Copy,
   MessageSquare,
   FolderInput,
@@ -35,6 +44,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -44,16 +61,17 @@ import {
 import {
   createFolder,
   getFolderPath,
-  listFolders,
   moveFolder,
   renameFolder,
   softDeleteFolder,
 } from "@/lib/services/folders";
 import {
   copyFile,
+  deleteVersion,
   downloadFile,
+  FOLDER_LISTING_LIMIT,
   getFile,
-  listFiles,
+  listFolderItems,
   moveFile,
   renameFile,
   softDeleteFile,
@@ -68,6 +86,7 @@ import {
 import {
   getErrorMessage,
   type FileRow,
+  type FileVersion,
   type Folder,
   type FolderAncestor,
 } from "@/lib/types/database";
@@ -79,6 +98,7 @@ import { FILES_COMMAND_EVENT, type FilesCommand } from "@/components/navigation"
 import ShareDialog from "@/components/files/share-dialog";
 import TextEditorDialog, { type TextEditorTarget } from "@/components/files/text-editor-dialog";
 import { isEditableTextFile } from "@/lib/text-files";
+import { can, roleOf } from "@/lib/file-permissions";
 import CommentsDialog, { type CommentsDialogTarget } from "@/components/files/comments-dialog";
 import { countComments } from "@/lib/services/comments";
 import {
@@ -92,6 +112,20 @@ import {
 
 type RowTarget = { kind: "folder" | "file"; id: string; name: string };
 
+/** Extra buttons for one row of the versions list in DetailsDialog. */
+type VersionActions = (version: FileVersion, reloadVersions: () => Promise<void>) => ReactNode;
+
+/**
+ * DetailsDialog with its `versionActions` slot. A component accepts props it
+ * does not use, so this is a plain (widening) assignment, not a cast; it keeps
+ * this file compiling whether or not file-dialogs.tsx already declares the prop.
+ */
+const DetailsDialogWithVersionActions: ComponentType<
+  ComponentProps<typeof DetailsDialog> & { versionActions?: VersionActions }
+> = DetailsDialog;
+
+const TRUNCATED_LIMIT_LABEL = FOLDER_LISTING_LIMIT.toLocaleString("en-US");
+
 export default function FilesClient({
   user,
 }: {
@@ -103,6 +137,7 @@ export default function FilesClient({
 
   const [folders, setFolders] = useState<Folder[]>([]);
   const [files, setFiles] = useState<FileRow[]>([]);
+  const [truncated, setTruncated] = useState(false);
   const [ancestors, setAncestors] = useState<FolderAncestor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -161,16 +196,17 @@ export default function FilesClient({
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const [folderList, fileList, ancestorList] = await Promise.all([
-        listFolders(fid),
-        listFiles(fid),
+      const [listing, ancestorList] = await Promise.all([
+        listFolderItems(fid),
         fid
           ? getFolderPath(fid).catch((): FolderAncestor[] => [])
           : Promise.resolve<FolderAncestor[]>([]),
       ]);
       if (requestId !== loadRequestId.current) return;
+      const { folders: folderList, files: fileList } = listing;
       setFolders(folderList);
       setFiles(fileList);
+      setTruncated(listing.truncated);
       setAncestors(ancestorList);
       // counts are a nice-to-have: load them after the listing, never block it
       void countComments(
@@ -382,7 +418,7 @@ export default function FilesClient({
 
   const handleToggleVisibility = async (file: FileRow) => {
     try {
-      const updated = await toggleFileVisibility(file);
+      const updated = { ...(await toggleFileVisibility(file)), my_role: file.my_role };
       setFiles((prev) =>
         prev.map((item) => (item.id === updated.id ? updated : item))
       );
@@ -394,11 +430,13 @@ export default function FilesClient({
   };
 
   const handleRefreshFile = async (fileId: string) => {
-    const updated = await getFile(fileId);
+    const fresh = await getFile(fileId);
+    // a table read has no my_role: keep the role the listing returned
+    const withRole = (item: FileRow): FileRow => ({ ...fresh, my_role: item.my_role });
     setFiles((prev) =>
-      prev.map((item) => (item.id === updated.id ? updated : item))
+      prev.map((item) => (item.id === fresh.id ? withRole(item) : item))
     );
-    setDetailsFile((prev) => (prev && prev.id === updated.id ? updated : prev));
+    setDetailsFile((prev) => (prev && prev.id === fresh.id ? withRole(prev) : prev));
   };
 
   const handleUploadNewVersion = async (selected: File) => {
@@ -419,7 +457,7 @@ export default function FilesClient({
       kind: "folder",
       id: folder.id,
       name: folder.name,
-      isOwner: folder.owner_id === user.id,
+      role: roleOf(folder, user.id),
       description: folder.comment,
     });
 
@@ -428,7 +466,7 @@ export default function FilesClient({
       kind: "file",
       id: file.id,
       name: file.name,
-      isOwner: file.owner_id === user.id,
+      role: roleOf(file, user.id),
     });
 
   const commentBadge = (id: string, onOpen: () => void) => {
@@ -451,6 +489,14 @@ export default function FilesClient({
   };
 
   const selectedCount = selectedFolders.size + selectedFiles.size;
+  // only owners may move an item to My Files (move_file / move_folder)
+  const ownsItem = (kind: "folder" | "file", id: string) => {
+    const item = kind === "folder" ? folders.find((f) => f.id === id) : files.find((f) => f.id === id);
+    return item ? roleOf(item, user.id) === "owner" : false;
+  };
+  const ownsSelection =
+    Array.from(selectedFolders).every((id) => ownsItem("folder", id)) &&
+    Array.from(selectedFiles).every((id) => ownsItem("file", id));
 
   const clearSelection = () => {
     setSelectedFolders(new Set());
@@ -533,7 +579,8 @@ export default function FilesClient({
   const isEmpty = visibleFolders.length === 0 && visibleFiles.length === 0;
 
   const folderMenu = (folder: Folder) => {
-    const isOwner = folder.owner_id === user.id;
+    const role = roleOf(folder, user.id);
+    const target: RowTarget = { kind: "folder", id: folder.id, name: folder.name };
     return (
       // stop clicks inside the (portaled) menu from bubbling to the row handler
       <div onClick={(e) => e.stopPropagation()}>
@@ -554,42 +601,36 @@ export default function FilesClient({
             <FolderOpen className="h-4 w-4 mr-2" />
             Open
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => openFolderComments(folder)}>
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Comments
-          </DropdownMenuItem>
-          {isOwner && (
+          {can(role, "comment") && (
+            <DropdownMenuItem onClick={() => openFolderComments(folder)}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Comments
+            </DropdownMenuItem>
+          )}
+          {can(role, "rename") && (
+            <DropdownMenuItem onClick={() => setRenameTarget(target)}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Rename
+            </DropdownMenuItem>
+          )}
+          {can(role, "move") && (
+            <DropdownMenuItem onClick={() => setMoveTarget(target)}>
+              <FolderInput className="h-4 w-4 mr-2" />
+              Move
+            </DropdownMenuItem>
+          )}
+          {can(role, "share") && (
+            <DropdownMenuItem onClick={() => setShareTarget(target)}>
+              <Share2 className="h-4 w-4 mr-2" />
+              Share
+            </DropdownMenuItem>
+          )}
+          {can(role, "delete") && (
             <>
-              <DropdownMenuItem
-                onClick={() =>
-                  setRenameTarget({ kind: "folder", id: folder.id, name: folder.name })
-                }
-              >
-                <Pencil className="h-4 w-4 mr-2" />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() =>
-                  setMoveTarget({ kind: "folder", id: folder.id, name: folder.name })
-                }
-              >
-                <FolderInput className="h-4 w-4 mr-2" />
-                Move
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() =>
-                  setShareTarget({ kind: "folder", id: folder.id, name: folder.name })
-                }
-              >
-                <Share2 className="h-4 w-4 mr-2" />
-                Share
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
-                onClick={() =>
-                  setDeleteTarget({ kind: "folder", id: folder.id, name: folder.name })
-                }
+                onClick={() => setDeleteTarget(target)}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
@@ -603,7 +644,12 @@ export default function FilesClient({
   };
 
   const fileMenu = (file: FileRow) => {
-    const isOwner = file.owner_id === user.id;
+    const role = roleOf(file, user.id);
+    const target: RowTarget = { kind: "file", id: file.id, name: file.name };
+    const canEditText = can(role, "edit_text") && isEditableTextFile(file);
+    const hasEditActions =
+      can(role, "rename") || can(role, "move") || can(role, "share") ||
+      canEditText || can(role, "upload_version");
     return (
       // stop clicks inside the (portaled) menu from bubbling to the row handler
       <div onClick={(e) => e.stopPropagation()}>
@@ -624,80 +670,78 @@ export default function FilesClient({
             <Eye className="h-4 w-4 mr-2" />
             Preview
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => void handleDownload(file)}>
-            <Download className="h-4 w-4 mr-2" />
-            Download
-          </DropdownMenuItem>
+          {can(role, "download") && (
+            <DropdownMenuItem onClick={() => void handleDownload(file)}>
+              <Download className="h-4 w-4 mr-2" />
+              Download
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             onClick={() => openAiSummary({ id: file.id, name: file.name, mimeType: file.mime_type })}
           >
             <Sparkles className="h-4 w-4 mr-2 text-primary" />
             AI tóm tắt
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setDetailsFile(file)}>
-            <Info className="h-4 w-4 mr-2" />
-            Details
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => openFileComments(file)}>
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Comments
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() =>
-              setCopyTarget(file)
-            }
-          >
-            <Copy className="h-4 w-4 mr-2" />
-            Copy to...
-          </DropdownMenuItem>
-          {isOwner && (
+          {can(role, "details") && (
+            <DropdownMenuItem onClick={() => setDetailsFile(file)}>
+              <Info className="h-4 w-4 mr-2" />
+              Details
+            </DropdownMenuItem>
+          )}
+          {can(role, "comment") && (
+            <DropdownMenuItem onClick={() => openFileComments(file)}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Comments
+            </DropdownMenuItem>
+          )}
+          {can(role, "download") && (
+            <DropdownMenuItem onClick={() => setCopyTarget(file)}>
+              <Copy className="h-4 w-4 mr-2" />
+              Copy to...
+            </DropdownMenuItem>
+          )}
+          {hasEditActions && <DropdownMenuSeparator />}
+          {can(role, "rename") && (
+            <DropdownMenuItem onClick={() => setRenameTarget(target)}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Rename
+            </DropdownMenuItem>
+          )}
+          {can(role, "move") && (
+            <DropdownMenuItem onClick={() => setMoveTarget(target)}>
+              <FolderInput className="h-4 w-4 mr-2" />
+              Move
+            </DropdownMenuItem>
+          )}
+          {can(role, "share") && (
+            <DropdownMenuItem onClick={() => setShareTarget(target)}>
+              <Share2 className="h-4 w-4 mr-2" />
+              Share
+            </DropdownMenuItem>
+          )}
+          {canEditText && (
+            <DropdownMenuItem onClick={() => setEditorTarget({ mode: "edit", file })}>
+              <FilePen className="h-4 w-4 mr-2" />
+              Edit text
+            </DropdownMenuItem>
+          )}
+          {can(role, "upload_version") && (
+            <DropdownMenuItem
+              onClick={() => {
+                versionTargetRef.current = file;
+                versionInputRef.current?.click();
+              }}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Upload new version
+            </DropdownMenuItem>
+          )}
+          {can(role, "delete") && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() =>
-                  setRenameTarget({ kind: "file", id: file.id, name: file.name })
-                }
-              >
-                <Pencil className="h-4 w-4 mr-2" />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() =>
-                  setMoveTarget({ kind: "file", id: file.id, name: file.name })
-                }
-              >
-                <FolderInput className="h-4 w-4 mr-2" />
-                Move
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() =>
-                  setShareTarget({ kind: "file", id: file.id, name: file.name })
-                }
-              >
-                <Share2 className="h-4 w-4 mr-2" />
-                Share
-              </DropdownMenuItem>
-              {isEditableTextFile(file) && (
-                <DropdownMenuItem onClick={() => setEditorTarget({ mode: "edit", file })}>
-                  <FilePen className="h-4 w-4 mr-2" />
-                  Edit text
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                onClick={() => {
-                  versionTargetRef.current = file;
-                  versionInputRef.current?.click();
-                }}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Upload new version
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
                 className="text-destructive"
-                onClick={() =>
-                  setDeleteTarget({ kind: "file", id: file.id, name: file.name })
-                }
+                onClick={() => setDeleteTarget(target)}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
@@ -785,7 +829,7 @@ export default function FilesClient({
             <p className="mt-1 text-sm text-muted-foreground">
               {loading
                 ? "Loading…"
-                : `${folders.length} folder${folders.length === 1 ? "" : "s"} · ${files.length} file${files.length === 1 ? "" : "s"}`}
+                : `${folders.length} folder${folders.length === 1 ? "" : "s"} · ${files.length} file${files.length === 1 ? "" : "s"}${truncated ? ` (first ${TRUNCATED_LIMIT_LABEL} shown)` : ""}`}
             </p>
           </div>
         </div>
@@ -1151,6 +1195,11 @@ export default function FilesClient({
             ))}
           </div>
         )}
+        {!loading && !error && truncated && (
+          <p className="text-center text-sm text-muted-foreground" role="status">
+            Showing the first {TRUNCATED_LIMIT_LABEL} items. Use Search to find the rest.
+          </p>
+        )}
       </div>
 
       {newFolderOpen && (
@@ -1191,6 +1240,7 @@ export default function FilesClient({
           mode="move"
           itemName={moveTarget.name}
           excludeFolderId={moveTarget.kind === "folder" ? moveTarget.id : null}
+          allowRoot={ownsItem(moveTarget.kind, moveTarget.id)}
           onSubmit={handleMove}
         />
       )}
@@ -1213,6 +1263,7 @@ export default function FilesClient({
           }}
           mode="move"
           itemName={`${selectedCount} item${selectedCount === 1 ? "" : "s"}`}
+          allowRoot={ownsSelection}
           onSubmit={handleBulkMove}
         />
       )}
@@ -1239,16 +1290,23 @@ export default function FilesClient({
         />
       )}
       {detailsFile && (
-        <DetailsDialog
+        <DetailsDialogWithVersionActions
           open
           onOpenChange={(open) => {
             if (!open) setDetailsFile(null);
           }}
           file={detailsFile}
-          isOwner={detailsFile.owner_id === user.id}
+          role={roleOf(detailsFile, user.id)}
           currentUserId={user.id}
           onRefreshFile={handleRefreshFile}
           onToggleVisibility={handleToggleVisibility}
+          versionActions={(version, reloadVersions) =>
+            // old versions only; deleting needs admin (owner, admin share or folder owner)
+            can(roleOf(detailsFile, user.id), "delete") &&
+            version.id !== detailsFile.current_version_id ? (
+              <DeleteVersionButton version={version} onDeleted={reloadVersions} />
+            ) : null
+          }
         />
       )}
       {previewFile && (
@@ -1302,5 +1360,74 @@ export default function FilesClient({
         onRetry={(localId) => void retryTask(localId)}
       />
     </div>
+  );
+}
+
+/** Trash button for one old version, with its confirmation. */
+function DeleteVersionButton({
+  version,
+  onDeleted,
+}: {
+  version: FileVersion;
+  /** reloads the versions list */
+  onDeleted: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const confirm = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      // also refreshes the storage usage meter (notifyQuotaChanged)
+      await deleteVersion(version.id);
+      setOpen(false);
+      toast.success(`Deleted version ${version.version_no}`);
+      await onDeleted();
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={`Delete v${version.version_no}`}
+        title={`Delete v${version.version_no}`}
+        className="text-muted-foreground hover:text-destructive"
+        disabled={deleting}
+        onClick={() => setOpen(true)}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!deleting) setOpen(next);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete version {version.version_no}?</DialogTitle>
+            <DialogDescription>
+              This frees {formatBytes(version.size)} and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void confirm()} disabled={deleting}>
+              {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {deleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

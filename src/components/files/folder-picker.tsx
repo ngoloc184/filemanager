@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronRight, Folder, Home, Loader2 } from "lucide-react";
+import { ChevronRight, Folder, Home, Loader2, Share2 } from "lucide-react";
+import { can } from "@/lib/file-permissions";
 import { listFolders } from "@/lib/services/folders";
+import { listSharedWithMe, type SharedItem } from "@/lib/services/sharing";
 import { getErrorMessage, type Folder as FolderType } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +12,21 @@ interface FolderPickerProps {
   value: string | null;
   onChange: (folderId: string | null) => void;
   excludeFolderId?: string | null;
+  /**
+   * Offer My Files (root) as a destination. Off when moving an item the
+   * caller does not own: move_file / move_folder only let the owner move
+   * an item to My Files.
+   */
+  allowRoot?: boolean;
+}
+
+type PickerFolder = Pick<FolderType, "id" | "name">;
+
+/** Shared folders the caller may add items to (move_file / copy_file need editor). */
+function writableSharedFolders(items: SharedItem[]): PickerFolder[] {
+  return items
+    .filter((item) => item.item_type === "folder" && can(item.role, "rename"))
+    .map(({ id, name }) => ({ id, name }));
 }
 
 function Node({
@@ -19,7 +36,7 @@ function Node({
   onChange,
   excludeFolderId,
 }: {
-  folder: FolderType;
+  folder: PickerFolder;
   depth: number;
   value: string | null;
   onChange: (folderId: string | null) => void;
@@ -104,9 +121,14 @@ export default function FolderPicker({
   value,
   onChange,
   excludeFolderId,
+  allowRoot = true,
 }: FolderPickerProps) {
   const [rootFolders, setRootFolders] = useState<FolderType[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // My Files only lists the caller's own folders; team folders shared with
+  // them are destinations too
+  const [sharedFolders, setSharedFolders] = useState<PickerFolder[] | null>(null);
+  const [sharedError, setSharedError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +138,13 @@ export default function FolderPicker({
       })
       .catch((err) => {
         if (!cancelled) setError(getErrorMessage(err));
+      });
+    listSharedWithMe()
+      .then((data) => {
+        if (!cancelled) setSharedFolders(writableSharedFolders(data));
+      })
+      .catch((err) => {
+        if (!cancelled) setSharedError(getErrorMessage(err));
       });
     return () => {
       cancelled = true;
@@ -127,9 +156,13 @@ export default function FolderPicker({
       <div
         className={cn(
           "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm cursor-pointer hover:bg-muted",
-          value === null && "bg-primary/10 text-primary font-medium"
+          allowRoot && value === null && "bg-primary/10 text-primary font-medium",
+          !allowRoot && "opacity-40 cursor-not-allowed"
         )}
-        onClick={() => onChange(null)}
+        title={allowRoot ? undefined : "Only the owner can move this item to My Files"}
+        onClick={() => {
+          if (allowRoot) onChange(null);
+        }}
       >
         <span className="w-4" />
         <Home className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -145,6 +178,24 @@ export default function FolderPicker({
       {rootFolders?.map((folder) => (
         <Node
           key={folder.id}
+          folder={folder}
+          depth={1}
+          value={value}
+          onChange={onChange}
+          excludeFolderId={excludeFolderId}
+        />
+      ))}
+      {(sharedError || (sharedFolders && sharedFolders.length > 0)) && (
+        <div className="flex items-center gap-1.5 px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
+          <span className="w-4" />
+          <Share2 className="h-3.5 w-3.5 shrink-0" />
+          <span>Shared with me</span>
+        </div>
+      )}
+      {sharedError && <p className="text-xs text-destructive px-2">{sharedError}</p>}
+      {sharedFolders?.map((folder) => (
+        <Node
+          key={`shared-${folder.id}`}
           folder={folder}
           depth={1}
           value={value}

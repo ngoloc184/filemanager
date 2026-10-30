@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/client";
 
 export type ActivityEvent = {
   id: string;
-  actor_id: string;
+  actor_id: string | null;
   actor_email: string | null;
   owner_id: string | null;
   action: string;

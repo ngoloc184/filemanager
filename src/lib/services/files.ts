@@ -6,7 +6,7 @@ import {
   buildStoragePath,
 } from "@/lib/storage";
 import { decodeTextFile } from "@/lib/text-files";
-import type { FileRow, FileVersion } from "@/lib/types/database";
+import type { FileRow, FileVersion, Folder } from "@/lib/types/database";
 
 export { UPLOADS_BUCKET, sanitizeStorageName } from "@/lib/storage";
 
@@ -19,19 +19,84 @@ export type DownloadableFile = Pick<FileRow, "id" | "name" | "current_version_id
 export type PreviewableFile = DownloadableFile &
   Pick<FileRow, "mime_type" | "size">;
 
-export async function listFiles(folderId: string | null): Promise<FileRow[]> {
+/** Items per list that one folder listing returns (list_folder_items p_limit). */
+export const FOLDER_LISTING_LIMIT = 2000;
+
+export type FolderItems = {
+  folders: Folder[];
+  files: FileRow[];
+  /** true when the folder holds more than FOLDER_LISTING_LIMIT folders or files */
+  truncated: boolean;
+};
+
+/**
+ * Lists one folder (or the caller's My Files root when `folderId` is null)
+ * with the caller's role on every item. The root only ever holds the
+ * caller's own items; shared and public items are reached through Shared,
+ * Search or links.
+ */
+export async function listFolderItems(folderId: string | null): Promise<FolderItems> {
   const supabase = createClient();
-  const query = supabase
-    .from("files")
-    .select("*")
-    .is("deleted_at", null)
-    .order("name", { ascending: true });
-  const scoped = folderId
-    ? query.eq("folder_id", folderId)
-    : query.is("folder_id", null);
-  const { data, error } = await scoped;
+  const { data, error } = await supabase.rpc("list_folder_items", {
+    p_folder_id: folderId,
+    p_limit: FOLDER_LISTING_LIMIT,
+  });
+  if (error?.code === "PGRST202") return listFolderItemsFallback(folderId);
   if (error) throw error;
-  return (data ?? []) as FileRow[];
+  const result = (data ?? {}) as Partial<FolderItems>;
+  return {
+    folders: result.folders ?? [],
+    files: result.files ?? [],
+    truncated: result.truncated === true,
+  };
+}
+
+/**
+ * Table queries for databases without list_folder_items (migration 033 not
+ * applied yet). Their real role is unknown, so items are marked viewer and
+ * the UI only offers to manage the caller's own items.
+ */
+async function listFolderItemsFallback(folderId: string | null): Promise<FolderItems> {
+  const supabase = createClient();
+  let foldersQuery = supabase.from("folders").select("*").is("deleted_at", null);
+  let filesQuery = supabase.from("files").select("*").is("deleted_at", null);
+  if (folderId) {
+    foldersQuery = foldersQuery.eq("parent_id", folderId);
+    filesQuery = filesQuery.eq("folder_id", folderId);
+  } else {
+    // root: only the caller's own items, like the RPC
+    const { data, error } = await supabase.auth.getUser();
+    if (error) throw error;
+    const ownerId = data.user?.id;
+    if (!ownerId) throw new Error("Not signed in");
+    foldersQuery = foldersQuery.is("parent_id", null).eq("owner_id", ownerId);
+    filesQuery = filesQuery.is("folder_id", null).eq("owner_id", ownerId);
+  }
+
+  const [foldersResult, filesResult] = await Promise.all([
+    foldersQuery.order("name", { ascending: true }).limit(FOLDER_LISTING_LIMIT + 1),
+    filesQuery.order("name", { ascending: true }).limit(FOLDER_LISTING_LIMIT + 1),
+  ]);
+  if (foldersResult.error) throw foldersResult.error;
+  if (filesResult.error) throw filesResult.error;
+  // RLS only returns rows the caller can view; roleOf() upgrades their own to owner
+  const folders = ((foldersResult.data ?? []) as Folder[]).map(
+    (folder): Folder => ({ ...folder, my_role: "viewer" })
+  );
+  const files = ((filesResult.data ?? []) as FileRow[]).map(
+    (file): FileRow => ({ ...file, my_role: "viewer" })
+  );
+  return {
+    folders: folders.slice(0, FOLDER_LISTING_LIMIT),
+    files: files.slice(0, FOLDER_LISTING_LIMIT),
+    truncated:
+      folders.length > FOLDER_LISTING_LIMIT || files.length > FOLDER_LISTING_LIMIT,
+  };
+}
+
+/** Files of one folder (or the caller's own root files); see listFolderItems. */
+export async function listFiles(folderId: string | null): Promise<FileRow[]> {
+  return (await listFolderItems(folderId)).files;
 }
 
 export async function listRecentFiles(limit = 20): Promise<FileRow[]> {
@@ -224,13 +289,32 @@ async function hardDelete(
   return data;
 }
 
+/** Text the documents freeze trigger raises for a registered/issued document's file. */
+const FROZEN_FILE_PATTERN = /locked because the document was registered or issued/i;
+
+/** A readable error when the database refused because a file is frozen. */
+function frozenFileError(err: unknown, message: string): unknown {
+  const text =
+    typeof err === "object" && err !== null && "message" in err
+      ? String((err as { message: unknown }).message)
+      : "";
+  return FROZEN_FILE_PATTERN.test(text) ? new Error(message) : err;
+}
+
 export async function hardDeleteFile(id: string): Promise<void> {
-  await hardDelete(
-    "get_file_version_paths",
-    { p_file_id: id },
-    "hard_delete_file",
-    { p_id: id }
-  );
+  try {
+    await hardDelete(
+      "get_file_version_paths",
+      { p_file_id: id },
+      "hard_delete_file",
+      { p_id: id }
+    );
+  } catch (err) {
+    throw frozenFileError(
+      err,
+      "This file belongs to a registered or issued document (văn bản), so it cannot be deleted permanently."
+    );
+  }
 }
 
 export async function hardDeleteFolderContents(
@@ -249,13 +333,20 @@ export async function hardDeleteTrash(): Promise<{
   folders_deleted: number;
   files_deleted: number;
 }> {
-  const result = await hardDelete(
-    "get_trash_storage_paths",
-    undefined,
-    "empty_trash",
-    undefined
-  );
-  return result as { folders_deleted: number; files_deleted: number };
+  try {
+    const result = await hardDelete(
+      "get_trash_storage_paths",
+      undefined,
+      "empty_trash",
+      undefined
+    );
+    return result as { folders_deleted: number; files_deleted: number };
+  } catch (err) {
+    throw frozenFileError(
+      err,
+      "The trash holds a file of a registered or issued document (văn bản), which cannot be deleted permanently. Restore that file, then empty the trash again."
+    );
+  }
 }
 
 export async function copyFile(
@@ -312,6 +403,30 @@ export async function downloadVersion(
     .createSignedUrl(version.storage_path, SIGNED_URL_TTL_DOWNLOAD);
   if (error) throw error;
   triggerBrowserDownload(data.signedUrl, fileName);
+}
+
+/**
+ * Permanently deletes one old (not current) version. Needs admin on the file.
+ * The database row goes first; the stored object is then removed. If that
+ * removal fails (or the object belongs to another uploader), the daily
+ * cleanup job removes it later.
+ */
+export async function deleteVersion(versionId: string): Promise<void> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("delete_file_version", {
+    p_version_id: versionId,
+  });
+  if (error) throw error;
+  const path = typeof data === "string" && data ? data : null;
+  if (path) {
+    const { error: removeError } = await supabase.storage
+      .from(UPLOADS_BUCKET)
+      .remove([path]);
+    if (removeError) {
+      console.warn("Version deleted; its stored object is left for the cleanup job", removeError.message);
+    }
+  }
+  notifyQuotaChanged();
 }
 
 export async function restoreVersion(

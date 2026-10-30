@@ -8,6 +8,13 @@ const securityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=()",
   },
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+  // Navigation-only CSP: no framing, no <base>/<object>, forms post same-origin
+  // (/auth/verify). script-src/connect-src wait for a nonce-based policy.
+  {
+    key: "Content-Security-Policy",
+    value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'",
+  },
 ];
 
 const nextConfig: NextConfig = {

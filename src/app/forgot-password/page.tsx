@@ -17,7 +17,9 @@ import {
   outcomeMessage,
   authErrorMessage,
   confirmRedirect,
+  nextFromSearch,
   passwordProblem,
+  withNext,
   type ConfirmOutcome,
 } from "@/lib/auth-links";
 
@@ -26,6 +28,7 @@ type Step = "email" | "inbox" | "password";
 function ForgotPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const next = nextFromSearch(searchParams);
   // "?step=password": the reset link signed the user in (/auth/confirm)
   const [step, setStep] = useState<Step>(searchParams.get("step") === "password" ? "password" : "email");
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
@@ -101,7 +104,7 @@ function ForgotPasswordForm() {
   const footer = (
     <>
       Remembered it?{" "}
-      <Link href="/login" className="font-medium text-primary hover:underline">
+      <Link href={withNext("/login", next)} className="font-medium text-primary hover:underline">
         Back to sign in
       </Link>
     </>
@@ -174,7 +177,7 @@ function ForgotPasswordForm() {
               Use a different e-mail
             </button>
             {" · "}
-            <Link href="/login" className="font-medium text-primary hover:underline">
+            <Link href={withNext("/login", next)} className="font-medium text-primary hover:underline">
               Back to sign in
             </Link>
           </>

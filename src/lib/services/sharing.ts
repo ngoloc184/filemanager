@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { flushNotificationPush } from "@/lib/services/notifications";
 
 export type ShareRoleInput = "viewer" | "editor" | "admin";
 
@@ -56,6 +57,8 @@ export async function shareFile(
     p_role: role,
   });
   if (error) throw error;
+  // the grantee is notified (bell + device push)
+  flushNotificationPush();
 }
 
 export async function shareFolder(
@@ -70,6 +73,8 @@ export async function shareFolder(
     p_role: role,
   });
   if (error) throw error;
+  // the grantee is notified (bell + device push)
+  flushNotificationPush();
 }
 
 export async function listFileShares(fileId: string): Promise<ShareEntry[]> {

@@ -47,8 +47,8 @@ set local role authenticated;
 
 -- ---------------------------------------------------------------- Alice
 select pg_temp.login(:A);
-select public.save_push_subscription('https://push.example.com/a1', 'key-a', 'auth-a', 'Chrome');
-select public.save_push_subscription('https://push.example.com/a1', 'key-a2', 'auth-a2', 'Chrome');
+select public.save_push_subscription('https://fcm.googleapis.com/fcm/send/a1', 'key-a', 'auth-a', 'Chrome');
+select public.save_push_subscription('https://fcm.googleapis.com/fcm/send/a1', 'key-a2', 'auth-a2', 'Chrome');
 select pg_temp.check(
   (select count(*) = 1 and min(p256dh) = 'key-a2' and min(user_id::text) = 'aaaaaaaa-0000-0000-0000-00000000000a' from public.push_subscriptions),
   'saving the same browser again updates its keys');
@@ -66,9 +66,9 @@ select pg_temp.check(
 select pg_temp.login(:B);
 select pg_temp.check((select count(*) from public.push_subscriptions) = 0,
   'other users cannot see a device''s keys');
-select public.delete_push_subscription('https://push.example.com/a1');
+select public.delete_push_subscription('https://fcm.googleapis.com/fcm/send/a1');
 -- Bob signs in on Alice's browser: the subscription moves to him
-select public.save_push_subscription('https://push.example.com/a1', 'key-b', 'auth-b', 'Chrome');
+select public.save_push_subscription('https://fcm.googleapis.com/fcm/send/a1', 'key-b', 'auth-b', 'Chrome');
 select pg_temp.check(
   (select count(*) = 1 and min(p256dh) = 'key-b' from public.push_subscriptions),
   'a browser used by another account moves to the new account');
@@ -76,11 +76,11 @@ select pg_temp.check(
 select pg_temp.login(:A);
 select pg_temp.check((select count(*) from public.push_subscriptions) = 0,
   'the previous account no longer receives pushes on that browser');
-select public.delete_push_subscription('https://push.example.com/a1');
+select public.delete_push_subscription('https://fcm.googleapis.com/fcm/send/a1');
 select pg_temp.login(:B);
 select pg_temp.check((select count(*) from public.push_subscriptions) = 1,
   'nobody removes another account''s subscription');
-select public.delete_push_subscription('https://push.example.com/a1');
+select public.delete_push_subscription('https://fcm.googleapis.com/fcm/send/a1');
 select pg_temp.check((select count(*) from public.push_subscriptions) = 0,
   'the owner removes it (sign-out)');
 

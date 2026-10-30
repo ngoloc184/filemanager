@@ -23,12 +23,17 @@ import {
   type ItemComment,
 } from "@/lib/services/comments";
 import { updateFolderComment } from "@/lib/services/folders";
+import { can, type ItemRole } from "@/lib/file-permissions";
 import { getErrorMessage } from "@/lib/types/database";
 
 export type CommentsDialogTarget = CommentTarget & {
   name: string;
-  /** The item's owner may delete any comment on it (enforced server-side too). */
-  isOwner: boolean;
+  /**
+   * The caller's role on the item (see roleOf). Editors may edit the folder
+   * description, admins and the owner may delete anyone's comment (enforced
+   * server-side too); everyone may edit and delete their own comments.
+   */
+  role: ItemRole | null;
   /** Folder description (the folder's original single comment). */
   description?: string | null;
 };
@@ -118,6 +123,8 @@ export default function CommentsDialog({
   const [description, setDescription] = useState(target.description ?? null);
   const [editingDescription, setEditingDescription] = useState(false);
   const listEndRef = useRef<HTMLDivElement>(null);
+  const canEditDescription = can(target.role, "rename");
+  const canDeleteAny = can(target.role, "delete");
 
   useEffect(() => {
     let cancelled = false;
@@ -190,7 +197,7 @@ export default function CommentsDialog({
   };
 
   const showDescription =
-    target.kind === "folder" && (description || (target.isOwner && editingDescription));
+    target.kind === "folder" && (description || (canEditDescription && editingDescription));
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -206,7 +213,7 @@ export default function CommentsDialog({
           <div className="rounded-lg border bg-muted/40 px-3 py-2.5 text-sm">
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="text-xs font-medium text-muted-foreground">Description</span>
-              {target.isOwner && !editingDescription && (
+              {canEditDescription && !editingDescription && (
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -229,7 +236,7 @@ export default function CommentsDialog({
             )}
           </div>
         )}
-        {target.kind === "folder" && target.isOwner && !description && !editingDescription && (
+        {target.kind === "folder" && canEditDescription && !description && !editingDescription && (
           <button
             type="button"
             className="-mt-2 w-fit text-xs text-muted-foreground hover:text-foreground hover:underline"
@@ -273,7 +280,7 @@ export default function CommentsDialog({
                           {format(new Date(comment.created_at), "MMM d, yyyy HH:mm")}
                           {edited && " · edited"}
                         </span>
-                        {editingId !== comment.id && (mine || target.isOwner) && (
+                        {editingId !== comment.id && (mine || canDeleteAny) && (
                           <div className="ml-auto flex shrink-0 gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/comment:opacity-100 sm:focus-within:opacity-100">
                             {mine && (
                               <Button

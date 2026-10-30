@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthNotice } from "@/components/auth/check-inbox";
-import { OUTCOME_MESSAGE, authErrorMessage, outcomeMessage, type ConfirmOutcome } from "@/lib/auth-links";
+import { OUTCOME_MESSAGE, authErrorMessage, nextFromSearch, outcomeMessage, withNext, type ConfirmOutcome } from "@/lib/auth-links";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -20,6 +20,8 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
+  // the page a signed-out visitor asked for (set by the middleware), e.g. an invitation
+  const next = nextFromSearch(searchParams);
 
   // /auth/confirm sends people here after a link that did not sign them in
   const notice = searchParams.get("notice") as ConfirmOutcome | null;
@@ -45,7 +47,7 @@ function LoginForm() {
       if (/not confirmed/i.test(error.message) || error.code === "email_not_confirmed") {
         // the account still has to click its confirmation link
         toast.error("Confirm your e-mail first: click the link in the e-mail we sent you.");
-        router.push(`/register?verify=${encodeURIComponent(email.trim())}`);
+        router.push(withNext(`/register?verify=${encodeURIComponent(email.trim())}`, next));
         return;
       }
       toast.error(authErrorMessage(error));
@@ -53,7 +55,7 @@ function LoginForm() {
     }
 
     toast.success("Welcome back!");
-    router.push("/dashboard");
+    router.push(next ?? "/dashboard");
     router.refresh();
   };
 
@@ -65,7 +67,7 @@ function LoginForm() {
       footer={
         <>
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="font-medium text-primary hover:underline">
+          <Link href={withNext("/register", next)} className="font-medium text-primary hover:underline">
             Create one
           </Link>
         </>
@@ -90,7 +92,7 @@ function LoginForm() {
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
             <Link
-              href={email.trim() ? `/forgot-password?email=${encodeURIComponent(email.trim())}` : "/forgot-password"}
+              href={withNext(email.trim() ? `/forgot-password?email=${encodeURIComponent(email.trim())}` : "/forgot-password", next)}
               className="text-xs font-medium text-primary hover:underline"
             >
               Forgot password?

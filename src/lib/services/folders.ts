@@ -1,19 +1,10 @@
 import { createClient } from "@/lib/supabase/client";
+import { listFolderItems } from "@/lib/services/files";
 import type { Folder, FolderAncestor } from "@/lib/types/database";
 
+/** Subfolders of one folder (or the caller's own root folders); see listFolderItems. */
 export async function listFolders(parentId: string | null): Promise<Folder[]> {
-  const supabase = createClient();
-  const query = supabase
-    .from("folders")
-    .select("*")
-    .is("deleted_at", null)
-    .order("name", { ascending: true });
-  const scoped = parentId
-    ? query.eq("parent_id", parentId)
-    : query.is("parent_id", null);
-  const { data, error } = await scoped;
-  if (error) throw error;
-  return (data ?? []) as Folder[];
+  return (await listFolderItems(parentId)).folders;
 }
 
 export async function createFolder(

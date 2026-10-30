@@ -7,10 +7,12 @@ import {
   failurePath,
   flowOf,
   isSameOriginPost,
+  nextFromSearch,
   outcomeMessage,
   passwordProblem,
   requestOrigin,
   safeNext,
+  withNext,
 } from "../auth-links.ts";
 
 describe("confirmRedirect", () => {
@@ -21,6 +23,48 @@ describe("confirmRedirect", () => {
     assert.equal(signup.searchParams.get("next"), "/dashboard");
     const recovery = new URL(confirmRedirect("https://files.example.com", "recovery"));
     assert.equal(recovery.searchParams.get("next"), "/forgot-password?step=password");
+  });
+
+  it("returns a sign-up to the requested page, never a reset", () => {
+    const origin = "https://files.example.com";
+    const signup = new URL(confirmRedirect(origin, "signup", "/invite/abc?x=1"));
+    assert.equal(signup.searchParams.get("next"), "/invite/abc?x=1");
+    const recovery = new URL(confirmRedirect(origin, "recovery", "/invite/abc"));
+    assert.equal(recovery.searchParams.get("next"), "/forgot-password?step=password");
+    for (const unsafe of ["//evil.com", "https://evil.com", "", null, undefined]) {
+      const url = new URL(confirmRedirect(origin, "signup", unsafe));
+      assert.equal(url.searchParams.get("next"), "/dashboard", JSON.stringify(unsafe));
+    }
+  });
+});
+
+describe("nextFromSearch", () => {
+  const next = (value: string) => nextFromSearch(new URLSearchParams({ next: value }));
+
+  it("accepts same-site paths with their query", () => {
+    assert.equal(next("/invite/abc"), "/invite/abc");
+    assert.equal(next("/documents?view=overdue"), "/documents?view=overdue");
+    // as the middleware writes it: encoded in the login URL
+    assert.equal(nextFromSearch(new URLSearchParams("next=%2Fdocuments%3Fview%3Doverdue")), "/documents?view=overdue");
+  });
+
+  it("rejects other sites, backslashes and control characters", () => {
+    for (const evil of ["//evil.com", "https://evil.com", "/\\evil", "/\tevil", "/\n/evil.com", "/x\u0000", "/x\u007f", "evil", ""]) {
+      assert.equal(next(evil), null, JSON.stringify(evil));
+    }
+  });
+
+  it("is null without a next parameter", () => {
+    assert.equal(nextFromSearch(new URLSearchParams()), null);
+    assert.equal(nextFromSearch(null), null);
+  });
+});
+
+describe("withNext", () => {
+  it("keeps the next parameter on auth links", () => {
+    assert.equal(withNext("/register", "/invite/abc"), "/register?next=%2Finvite%2Fabc");
+    assert.equal(withNext("/forgot-password?email=a%40b.c", "/recent"), "/forgot-password?email=a%40b.c&next=%2Frecent");
+    assert.equal(withNext("/login", null), "/login");
   });
 });
 
@@ -98,6 +142,14 @@ describe("failure handling", () => {
     assert.equal(failurePath("recovery", "expired"), "/forgot-password?error=expired");
     assert.equal(failurePath("signup", "confirmed"), "/login?notice=confirmed");
     assert.equal(failurePath(null, "invalid"), "/login?error=invalid");
+  });
+
+  it("keeps a sign-up link's next page through sign-in, never a reset's", () => {
+    assert.equal(failurePath("signup", "confirmed", "/invite/abc"), "/login?notice=confirmed&next=%2Finvite%2Fabc");
+    assert.equal(failurePath(null, "expired", "/recent"), "/login?error=expired&next=%2Frecent");
+    assert.equal(failurePath("signup", "confirmed", "/dashboard"), "/login?notice=confirmed");
+    assert.equal(failurePath("signup", "invalid", "//evil.com"), "/login?error=invalid");
+    assert.equal(failurePath("recovery", "expired", "/invite/abc"), "/forgot-password?error=expired");
   });
 
   it("knows the flow from the parameter or the token type", () => {

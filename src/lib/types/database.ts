@@ -1,3 +1,5 @@
+import type { ItemRole } from "@/lib/file-permissions";
+
 export type ShareRole = "viewer" | "editor" | "admin" | "owner";
 
 export type Folder = {
@@ -11,6 +13,8 @@ export type Folder = {
   deleted_at: string | null;
   deleted_by: string | null;
   legacy_batch_id: string | null;
+  /** caller's role, set by list_folder_items (absent on plain table reads) */
+  my_role?: ItemRole | null;
 };
 
 export type FileRow = {
@@ -30,6 +34,8 @@ export type FileRow = {
   deleted_at: string | null;
   deleted_by: string | null;
   legacy_file_id: string | null;
+  /** caller's role, set by list_folder_items (absent on plain table reads) */
+  my_role?: ItemRole | null;
 };
 
 export type FileVersion = {
@@ -40,7 +46,7 @@ export type FileVersion = {
   size: number;
   mime_type: string;
   checksum: string | null;
-  uploaded_by: string;
+  uploaded_by: string | null;
   created_at: string;
 };
 

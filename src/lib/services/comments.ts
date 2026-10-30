@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { getErrorMessage } from "@/lib/types/database";
+import { flushNotificationPush } from "@/lib/services/notifications";
 
 export const COMMENT_MAX_LENGTH = 5000;
 
@@ -7,7 +8,7 @@ export type CommentTarget = { kind: "file" | "folder"; id: string };
 
 export type ItemComment = {
   id: string;
-  author_id: string;
+  author_id: string | null;
   author_email: string | null;
   body: string;
   created_at: string;
@@ -50,6 +51,8 @@ export async function addComment(
     .rpc("add_item_comment", { ...targetArgs(target), p_body: body })
     .single();
   if (error) throw commentsError(error);
+  // the item's owner is notified (bell + device push)
+  flushNotificationPush();
   return data as ItemComment;
 }
 

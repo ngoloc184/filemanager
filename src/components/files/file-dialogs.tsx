@@ -34,6 +34,7 @@ import {
 } from "@/lib/types/database";
 import { cn, formatBytes } from "@/lib/utils";
 import { decodeTextFile } from "@/lib/text-files";
+import { can, type ItemRole } from "@/lib/file-permissions";
 import { format } from "date-fns";
 
 const TEXT_PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
@@ -227,6 +228,7 @@ export function MoveCopyDialog({
   mode,
   itemName,
   excludeFolderId,
+  allowRoot = true,
   onSubmit,
 }: {
   open: boolean;
@@ -234,6 +236,8 @@ export function MoveCopyDialog({
   mode: "move" | "copy";
   itemName: string;
   excludeFolderId?: string | null;
+  /** false when the caller may not put the item in My Files (only owners can) */
+  allowRoot?: boolean;
   onSubmit: (destFolderId: string | null) => Promise<void>;
 }) {
   const [dest, setDest] = useState<string | null>(null);
@@ -265,12 +269,13 @@ export function MoveCopyDialog({
           value={dest}
           onChange={setDest}
           excludeFolderId={excludeFolderId}
+          allowRoot={allowRoot}
         />
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => void submit()} disabled={submitting}>
+          <Button onClick={() => void submit()} disabled={submitting || (!allowRoot && dest === null)}>
             {submitting
               ? mode === "move"
                 ? "Moving..."
@@ -289,7 +294,7 @@ export function DetailsDialog({
   open,
   onOpenChange,
   file,
-  isOwner,
+  role,
   currentUserId,
   onRefreshFile,
   onToggleVisibility,
@@ -297,7 +302,8 @@ export function DetailsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   file: FileRow;
-  isOwner: boolean;
+  /** the caller's role on `file` (see roleOf); null hides every change action */
+  role: ItemRole | null;
   currentUserId: string;
   onRefreshFile: (fileId: string) => Promise<void>;
   onToggleVisibility: (file: FileRow) => Promise<void>;
@@ -310,6 +316,10 @@ export function DetailsDialog({
   const [uploadingVersion, setUploadingVersion] = useState(false);
   const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null);
   const versionInputRef = useRef<HTMLInputElement>(null);
+  const canTogglePublic = can(role, "toggle_public");
+  const canEditTags = can(role, "edit_tags");
+  const canUploadVersion = can(role, "upload_version");
+  const canRestoreVersion = can(role, "restore_version");
 
   const reloadVersions = useCallback(async () => {
     try {
@@ -450,7 +460,7 @@ export function DetailsDialog({
           ))}
           <div className="flex justify-between gap-4 text-sm items-center">
             <span className="text-muted-foreground">Visibility</span>
-            {isOwner ? (
+            {canTogglePublic ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -489,7 +499,7 @@ export function DetailsDialog({
                   {tags.map((tag) => (
                     <Badge key={tag.tag_id} variant="secondary" className="gap-1 pr-1">
                       #{tag.name}
-                      {isOwner && (
+                      {canEditTags && (
                         <button
                           type="button"
                           className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5"
@@ -504,7 +514,7 @@ export function DetailsDialog({
                   ))}
                 </div>
               )}
-              {isOwner && (
+              {canEditTags && (
                 <div className="flex gap-2">
                   <Input
                     value={tagInput}
@@ -542,7 +552,7 @@ export function DetailsDialog({
                 <span className="text-muted-foreground">({versions.length})</span>
               )}
             </h4>
-            {isOwner && (
+            {canUploadVersion && (
               <>
                 <input
                   ref={versionInputRef}
@@ -602,7 +612,7 @@ export function DetailsDialog({
                   >
                     <Download className="h-3.5 w-3.5" />
                   </Button>
-                  {isOwner && version.id !== file.current_version_id && (
+                  {canRestoreVersion && version.id !== file.current_version_id && (
                     <Button
                       variant="ghost"
                       size="icon-xs"

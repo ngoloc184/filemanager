@@ -32,7 +32,7 @@ export default async function ConfirmPage({ searchParams }: PageProps<"/auth/con
   const next = one("next");
   const errorCode = one("error_code") ?? one("error");
 
-  if (errorCode) redirect(failurePath(flow, failedOutcome({ flow, hadCode: false, errorCode })));
+  if (errorCode) redirect(failurePath(flow, failedOutcome({ flow, hadCode: false, errorCode }), next));
 
   const code = one("code");
   if (code) {
@@ -44,7 +44,7 @@ export default async function ConfirmPage({ searchParams }: PageProps<"/auth/con
   }
 
   const tokenHash = one("token_hash");
-  if (!tokenHash || !type || !TYPES.has(type as EmailOtpType)) redirect(failurePath(flow, "invalid"));
+  if (!tokenHash || !type || !TYPES.has(type as EmailOtpType)) redirect(failurePath(flow, "invalid", next));
 
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();

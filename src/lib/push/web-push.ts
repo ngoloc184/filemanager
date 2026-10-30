@@ -1,5 +1,6 @@
 import "server-only";
 import webpush, { WebPushError } from "web-push";
+import { isAllowedPushEndpoint } from "./endpoints.ts";
 
 /**
  * Web Push sender (VAPID). Configured with NEXT_PUBLIC_VAPID_PUBLIC_KEY,
@@ -17,12 +18,16 @@ export function vapidDetails(origin: string): { subject: string; publicKey: stri
 
 export type PushTarget = { id: string; endpoint: string; p256dh: string; auth: string };
 
-/** Sends one push; "gone" means the browser unsubscribed (remove it). */
+/**
+ * Sends one push; "gone" means the browser unsubscribed or the endpoint is
+ * not an allowed push service (remove it either way, nothing is sent).
+ */
 export async function sendPush(
   target: PushTarget,
   payload: unknown,
   vapid: { subject: string; publicKey: string; privateKey: string }
 ): Promise<"sent" | "gone" | "failed"> {
+  if (!isAllowedPushEndpoint(target.endpoint)) return "gone";
   try {
     await webpush.sendNotification({ endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } }, JSON.stringify(payload), {
       vapidDetails: vapid,

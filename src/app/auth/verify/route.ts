@@ -25,13 +25,13 @@ export async function POST(request: NextRequest) {
   if (!isSameOriginPost(request.headers, origin)) return go(failurePath(flow, "invalid"));
 
   const tokenHash = field("token_hash");
-  if (!tokenHash || !type || !TYPES.has(type as EmailOtpType)) return go(failurePath(flow, "invalid"));
+  if (!tokenHash || !type || !TYPES.has(type as EmailOtpType)) return go(failurePath(flow, "invalid", field("next")));
 
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as EmailOtpType });
   if (error) {
     // keep Supabase's reason ("otp_expired" also covers a link that was already used)
-    return go(failurePath(flow, failedOutcome({ flow, hadCode: false, errorCode: error.code ?? "invalid" })));
+    return go(failurePath(flow, failedOutcome({ flow, hadCode: false, errorCode: error.code ?? "invalid" }), field("next")));
   }
   return go(safeNext(field("next"), FLOW_NEXT[flow ?? "signup"]));
 }

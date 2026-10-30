@@ -14,12 +14,32 @@ export const FLOW_NEXT: Record<AuthFlow, string> = {
   recovery: "/forgot-password?step=password",
 };
 
-/** The redirect URL given to Supabase (must be in the project's Redirect URLs). */
-export function confirmRedirect(origin: string, flow: AuthFlow): string {
+/**
+ * The redirect URL given to Supabase (must be in the project's Redirect URLs).
+ * A safe `next` (e.g. an invitation link) replaces the sign-up destination;
+ * a password reset always continues to the new-password step.
+ */
+export function confirmRedirect(origin: string, flow: AuthFlow, next?: string | null): string {
   const url = new URL("/auth/confirm", origin);
   url.searchParams.set("flow", flow);
-  url.searchParams.set("next", FLOW_NEXT[flow]);
+  const custom = flow === "signup" ? safeNext(next, "") : "";
+  url.searchParams.set("next", custom || FLOW_NEXT[flow]);
   return url.toString();
+}
+
+/**
+ * The page to return to after signing in, from "?next=" (set by the
+ * middleware when it sent a signed-out visitor to /login). Null when it is
+ * missing or not a same-site path.
+ */
+export function nextFromSearch(search: URLSearchParams | null): string | null {
+  return safeNext(search?.get("next"), "") || null;
+}
+
+/** `href` with "?next=" kept, so /login ↔ /register links do not lose it. */
+export function withNext(href: string, next: string | null): string {
+  if (!next) return href;
+  return `${href}${href.includes("?") ? "&" : "?"}next=${encodeURIComponent(next)}`;
 }
 
 export function passwordProblem(password: string, confirm: string): string | null {
@@ -107,10 +127,16 @@ export function outcomeMessage(outcome: ConfirmOutcome, flow: AuthFlow): string 
   return OUTCOME_MESSAGE[outcome];
 }
 
-/** Where a failed link sends the user: /forgot-password for resets, else /login. */
-export function failurePath(flow: AuthFlow | null, outcome: ConfirmOutcome): string {
+/**
+ * Where a failed link sends the user: /forgot-password for resets, else /login.
+ * A sign-up link keeps a safe `next` (e.g. an invitation opened in another
+ * browser), so signing in there still continues to it.
+ */
+export function failurePath(flow: AuthFlow | null, outcome: ConfirmOutcome, next?: string | null): string {
   const page = flow === "recovery" ? "/forgot-password" : "/login";
-  return `${page}?${outcome === "confirmed" ? "notice" : "error"}=${outcome}`;
+  const path = `${page}?${outcome === "confirmed" ? "notice" : "error"}=${outcome}`;
+  const keep = flow === "recovery" ? "" : safeNext(next, "");
+  return keep && keep !== FLOW_NEXT.signup ? withNext(path, keep) : path;
 }
 
 /** The flow of a link: the app's `flow` parameter, else the token type. */

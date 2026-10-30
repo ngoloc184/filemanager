@@ -8,6 +8,9 @@ const SESSIONLESS_PREFIXES = [
   "/api/public-share/",
   "/superapp/",
   "/api/superapp/",
+  // uptime probes and Vercel Cron (authorised by CRON_SECRET, not a session)
+  "/api/health",
+  "/api/cron/",
 ];
 
 export async function proxy(request: NextRequest) {
