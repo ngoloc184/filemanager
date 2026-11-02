@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseDoc, parseLog, schedule, type StepLog, type WorkflowDoc } from "./model";
-import { buildReminderEmail, dueReminders, recipientsFor, reminderKind, roleKey, wallNow, type ReminderKind } from "./reminders";
+import { buildConfirmEmail, buildReminderEmail, confirmDigests, dueReminders, isWorkday, recipientsFor, reminderKind, roleKey, wallNow, type ReminderKind } from "./reminders";
 import { sendMail } from "./mailer";
 
 /** Plans are written in this zone's local time; the daily run and "now" use it too. */
@@ -10,8 +10,11 @@ export const PLAN_TIME_ZONE = process.env.WORKFLOW_TIME_ZONE || "Asia/Ho_Chi_Min
 type Admin = ReturnType<typeof createAdminClient>;
 
 export interface SendResult {
+  /** the step, or "_confirm" for a role's confirmation request */
   stepId: string;
-  kind: ReminderKind;
+  kind: ReminderKind | "confirm";
+  /** the role of a confirmation request */
+  roleName?: string;
   /** addresses the mail was accepted for */
   sent: number;
   /** "no-recipients": the step's roles have no addresses in the directory */
@@ -95,6 +98,53 @@ async function sendOne(
   return { stepId, kind, sent: delivered.length };
 }
 
+const CONFIRM_STEP = "_confirm";
+
+/** Asks one role to confirm the timeline of its unconfirmed steps; records it like a reminder. */
+async function sendConfirm(
+  admin: Admin,
+  plan: Plan,
+  roleId: string,
+  now: number,
+  directory: Map<string, string[]>,
+  opts: { origin: string; manual: boolean; sentBy?: { id: string; name: string } }
+): Promise<SendResult> {
+  const role = plan.doc.roles.find((r) => r.id === roleId);
+  const digest = confirmDigests(plan.doc).find((d) => d.roleId === roleId);
+  const base = { stepId: CONFIRM_STEP, kind: "confirm" as const, roleName: role?.name };
+  if (!role || !digest) return { ...base, sent: 0, skipped: "failed" };
+  const to = directory.get(roleKey(role.name)) ?? [];
+  if (!to.length) return { ...base, sent: 0, skipped: "no-recipients" };
+
+  const day = new Date(Math.floor(now / 1440) * 86_400_000).toISOString().slice(0, 10);
+  let claimed: string | null = null;
+  if (!opts.manual) {
+    const { data, error } = await admin
+      .from("workflow_reminders")
+      .insert({ workflow_id: plan.id, step_id: CONFIRM_STEP, kind: "confirm", day, role_name: role.name, recipients: to })
+      .select("id")
+      .maybeSingle();
+    if (error || !data) return { ...base, sent: 0, skipped: "already-sent" };
+    claimed = data.id;
+  }
+  const slots = schedule(plan.doc, plan.logs);
+  const steps = digest.stepIds.flatMap((id) => {
+    const step = plan.doc.steps.find((s) => s.id === id);
+    const slot = slots.get(id);
+    return step && slot ? [{ step, slot }] : [];
+  });
+  const mail = buildConfirmEmail({ workflowName: plan.name, doc: plan.doc, roleName: role.name, steps, link: `${opts.origin}/workflow/${plan.id}`, sentBy: opts.sentBy?.name });
+  const delivered: string[] = [];
+  for (const address of to) if (await sendMail(address, mail)) delivered.push(address);
+  if (!delivered.length) {
+    if (claimed) await admin.from("workflow_reminders").delete().eq("id", claimed);
+    return { ...base, sent: 0, skipped: "failed" };
+  }
+  if (claimed) await admin.from("workflow_reminders").update({ recipients: delivered }).eq("id", claimed);
+  else await admin.from("workflow_reminders").insert({ workflow_id: plan.id, step_id: CONFIRM_STEP, kind: "confirm", day, role_name: role.name, manual: true, recipients: delivered, sent_by: opts.sentBy?.id ?? null });
+  return { ...base, sent: delivered.length };
+}
+
 async function loadPlan(admin: Admin, id: string, today: string): Promise<Plan | null> {
   const { data } = await admin.from("workflows").select("id, name, doc").eq("id", id).maybeSingle();
   const doc = data ? parseDoc(data.doc, today) : null;
@@ -104,15 +154,27 @@ async function loadPlan(admin: Admin, id: string, today: string): Promise<Plan |
 }
 
 /**
- * "Nhắc ngay": e-mails one step (whatever its state, unless done), or every step that needs a
- * reminder today when no step is given. Signed-in members only (the route checks).
+ * "Nhắc ngay": e-mails one step (whatever its state, unless done), every step that needs a
+ * reminder today (no target), or each role its unconfirmed steps ({ confirm: true }). Admins only
+ * (the route checks).
  */
-export async function sendNow(workflowId: string, stepId: string | null, sentBy: { id: string; name: string }, origin: string): Promise<SendResult[] | null> {
+export async function sendNow(
+  workflowId: string,
+  target: { stepId: string } | { confirm: true } | null,
+  sentBy: { id: string; name: string },
+  origin: string
+): Promise<SendResult[] | null> {
   const admin = createAdminClient();
   const now = wallNow(PLAN_TIME_ZONE);
   const plan = await loadPlan(admin, workflowId, new Date(now * 60_000).toISOString().slice(0, 10));
   if (!plan) return null;
   const directory = await loadDirectory(admin);
+  if (target && "confirm" in target) {
+    const results: SendResult[] = [];
+    for (const d of confirmDigests(plan.doc)) results.push(await sendConfirm(admin, plan, d.roleId, now, directory, { origin, manual: true, sentBy }));
+    return results;
+  }
+  const stepId = target?.stepId ?? null;
   const slots = schedule(plan.doc, plan.logs);
   const targets = stepId
     ? plan.doc.steps.filter((s) => s.id === stepId).flatMap((s) => {
@@ -128,7 +190,10 @@ export async function sendNow(workflowId: string, stepId: string | null, sentBy:
   return results;
 }
 
-/** The daily run: every plan's reminders for today, at most once per step, kind and day. */
+/**
+ * The daily run: every plan's reminders for today and a confirmation request per role with
+ * unconfirmed steps, each at most once per step (or role), kind and day.
+ */
 export async function runDailyReminders(origin: string): Promise<{ plans: number; sent: number; skipped: number }> {
   const admin = createAdminClient();
   const now = wallNow(PLAN_TIME_ZONE);
@@ -146,6 +211,12 @@ export async function runDailyReminders(origin: string): Promise<{ plans: number
     plan.logs = logs.get(plan.id) ?? [];
     for (const t of dueReminders(plan.doc, schedule(plan.doc, plan.logs), now)) {
       const r = await sendOne(admin, plan, t.stepId, t.kind, now, directory, { origin, manual: false });
+      sent += r.sent;
+      if (r.skipped) skipped++;
+    }
+    if (!isWorkday(Math.floor(now / 1440), plan.doc.hours)) continue;
+    for (const d of confirmDigests(plan.doc)) {
+      const r = await sendConfirm(admin, plan, d.roleId, now, directory, { origin, manual: false });
       sent += r.sent;
       if (r.skipped) skipped++;
     }

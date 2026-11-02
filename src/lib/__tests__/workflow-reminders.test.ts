@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { blankDoc, parseStamp, schedule, type WorkflowDoc, type WorkflowStep } from "../workflow/model.ts";
-import { buildReminderEmail, dueReminders, longMoment, recipientsFor, reminderKind, wallNow } from "../workflow/reminders.ts";
+import { buildConfirmEmail, buildReminderEmail, confirmDigests, dueReminders, longMoment, recipientsFor, reminderKind, wallNow } from "../workflow/reminders.ts";
 
 // 2026-11-02 is a Monday
 const t = (s: string) => parseStamp(s);
@@ -13,6 +13,7 @@ const step = (id: string, days: number, extra: Partial<WorkflowStep> = {}): Work
   duration: { amount: days, unit: "d" },
   status: "todo",
   position: { x: 0, y: 0 },
+  confirmed: null,
   ...extra,
 });
 const plan = (steps: WorkflowStep[], start = "2026-11-02T08:00"): WorkflowDoc => ({
@@ -107,5 +108,30 @@ describe("buildReminderEmail", () => {
     const mail = buildReminderEmail({ ...base, kind: "due", now: t("2026-11-03T08:00"), sentBy: "<script>" });
     assert.ok(!mail.html.includes("<b>test</b>") && mail.html.includes("&lt;b&gt;test&lt;/b&gt; &amp; &quot;ký&quot;"));
     assert.ok(mail.html.includes("&lt;script&gt;") && !mail.html.includes("<script>"));
+  });
+});
+
+describe("confirmation requests", () => {
+  it("groups unconfirmed, unfinished steps by role", () => {
+    const doc = plan([
+      step("a", 1),
+      step("b", 1, { picIds: ["r_qc", "r_dev"] }),
+      step("c", 1, { confirmed: { at: "x", by: "Lan", role: "QC" } }),
+      step("d", 1, { status: "done" }),
+    ]);
+    assert.deepEqual(confirmDigests(doc), [
+      { roleId: "r_qc", roleName: "QC HDBank", stepIds: ["a", "b"] },
+      { roleId: "r_dev", roleName: "DEV FPT", stepIds: ["b"] },
+    ]);
+  });
+
+  it("asks one role to confirm its steps, politely", () => {
+    const doc = plan([step("a", 2), step("b", 1)]);
+    const slots = schedule(doc);
+    const mail = buildConfirmEmail({ workflowName: "UAT", doc, roleName: "QC HDBank", steps: doc.steps.map((s) => ({ step: s, slot: slots.get(s.id)! })), link: "https://x/workflow/1" });
+    assert.equal(mail.subject, "[Xác nhận timeline] UAT: 2 bước của nhóm QC HDBank cần xác nhận");
+    assert.match(mail.text, /^Kính gửi Quý Anh\/Chị thuộc nhóm QC HDBank,/);
+    assert.ok(mail.text.includes("• Bước 1: Bước a\n  Thời lượng: 2 ngày · Bắt đầu: Thứ hai, 02/11/2026 lúc 08:00 · Hạn: Thứ ba, 03/11/2026 lúc 17:00"));
+    assert.ok(mail.html.includes("Mở workflow để xác nhận"));
   });
 });

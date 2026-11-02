@@ -45,6 +45,8 @@ export interface WorkflowStep {
   duration: Duration;
   status: StepStatus;
   position: { x: number; y: number };
+  /** set when someone confirmed the timeline (chốt); after that only extensions change it, or an admin */
+  confirmed: { at: string; by: string; role: string } | null;
 }
 
 export interface WorkflowEdge {
@@ -71,7 +73,7 @@ export interface WorkflowDoc {
 export interface StepLog {
   id: string;
   stepId: string;
-  kind: "extend" | "duration";
+  kind: "extend" | "duration" | "confirm";
   amount: number;
   unit: DurationUnit;
   oldAmount: number | null;
@@ -358,6 +360,7 @@ export function makeStep(position: { x: number; y: number }, picIds: string[] = 
     duration: { amount: 1, unit: "d" },
     status: "todo",
     position: { x: Math.round(position.x), y: Math.round(position.y) },
+    confirmed: null,
   };
 }
 
@@ -415,13 +418,14 @@ export function blankDoc(today: string): WorkflowDoc {
   return { version: 2, description: "", start: defaultStart(today), hours: { ...DEFAULT_HOURS }, roles: [], steps: [], edges: [], clonedFrom: null };
 }
 
-/** A copy for another feature: same steps, roles and lengths, statuses back to "todo", a new start. */
+/** A copy for another feature: same steps, roles and lengths; statuses and confirmations start over. */
 export function cloneDoc(doc: WorkflowDoc, source: { name: string }, start: string): WorkflowDoc {
   const copy = structuredClone(doc);
   return {
     ...copy,
     start: isStamp(start) ? start : doc.start,
-    steps: copy.steps.map((s) => ({ ...s, status: "todo" })),
+    // a new feature: statuses start over and every timeline needs confirming again
+    steps: copy.steps.map((s) => ({ ...s, status: "todo", confirmed: null })),
     clonedFrom: { name: source.name.slice(0, LIMITS.name) },
   };
 }
@@ -500,6 +504,16 @@ export function parseHours(v: unknown): WorkHours {
   return hm(hours.dayEnd) > hm(hours.dayStart) && minutesPerDay(hours) >= 60 ? hours : { ...DEFAULT_HOURS };
 }
 
+function parseConfirmed(v: unknown): WorkflowStep["confirmed"] {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  return { at: str(o.at, 40), by: str(o.by, LIMITS.person), role: str(o.role, LIMITS.person) };
+}
+
+export function isConfirmed(step: Pick<WorkflowStep, "confirmed">): boolean {
+  return step.confirmed !== null;
+}
+
 /** Turns an untrusted document into a valid one, dropping what does not fit; null when it is not a plan. */
 export function parseDoc(input: unknown, today: string): WorkflowDoc | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
@@ -528,6 +542,7 @@ export function parseDoc(input: unknown, today: string): WorkflowDoc | null {
       duration: parseDuration(o.duration),
       status: STEP_STATUSES.includes(o.status as StepStatus) ? (o.status as StepStatus) : "todo",
       position: { x: Math.round(num(p.x, 0)), y: Math.round(num(p.y, 0)) },
+      confirmed: parseConfirmed(o.confirmed),
     });
   }
   const stepIds = new Set(steps.map((s) => s.id));
@@ -559,7 +574,7 @@ export function parseDoc(input: unknown, today: string): WorkflowDoc | null {
 /** A row of workflow_step_logs as the API returns it, or null when malformed. */
 export function parseLog(input: unknown): StepLog | null {
   const o = (input ?? {}) as Record<string, unknown>;
-  if (typeof o.id !== "string" || !isId(o.step_id) || (o.kind !== "extend" && o.kind !== "duration")) return null;
+  if (typeof o.id !== "string" || !isId(o.step_id) || (o.kind !== "extend" && o.kind !== "duration" && o.kind !== "confirm")) return null;
   const unit = (v: unknown): DurationUnit | null => (v === "h" || v === "d" ? v : null);
   if (!unit(o.unit) || typeof o.amount !== "number") return null;
   return {

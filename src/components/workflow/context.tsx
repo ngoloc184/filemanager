@@ -13,13 +13,15 @@ export interface WorkflowContextValue {
   slots: Map<string, Slot>;
   /** the viewer's clock, minutes (refreshed every minute) */
   now: number;
-  /** signed in: may change everything; otherwise only extend and change lengths, with a log */
+  /** the plan's owner or an admin: may change everything */
   canEdit: boolean;
+  /** signed in: logged changes go under the account's name (no name field) */
+  signedIn: boolean;
   /** steps of other roles are dimmed */
   focusRoleId: string | null;
   edit: (fn: (doc: WorkflowDoc) => WorkflowDoc, key?: string | null) => void;
   openStep: (id: string, tab?: "details" | "history") => void;
-  /** opens the logged form: extend, or change the length (viewers) */
+  /** opens the logged form: extend, change an unconfirmed length, or confirm the timeline */
   openChange: (stepId: string, kind: ChangeInput["kind"]) => void;
   openRoles: () => void;
   /** the role e-mail directory and reminders: signed-in members only */

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownRight, ArrowUpLeft, CalendarPlus, PencilLine, Trash2, X } from "lucide-react";
+import { ArrowDownRight, ArrowUpLeft, BadgeCheck, CalendarPlus, CircleDashed, PencilLine, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -10,7 +10,7 @@ import { DurationField } from "./duration-editor";
 import { RoleChip } from "./pic-picker";
 import { StepHistory } from "./step-history";
 import { StepReminders } from "./step-reminders";
-import { ROLE_STYLE, STATUS_META, durationLabel, fullMoment, mark, minutesLabel } from "./styles";
+import { ROLE_STYLE, STATUS_META, durationLabel, fullMoment, logTime, mark, minutesLabel } from "./styles";
 
 const FIELD = "w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
@@ -96,13 +96,34 @@ export function StepPanel({
                       )}
                       {late && <span className="font-medium text-rose-600 dark:text-rose-400"> · Đã trễ hạn</span>}
                     </p>
+                    {step.confirmed ? (
+                      <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+                        <BadgeCheck className="size-3.5 shrink-0" />
+                        Đã chốt bởi <b>{step.confirmed.by}</b> ({step.confirmed.role}) · {logTime(step.confirmed.at)}
+                        {!canEdit && <span className="text-muted-foreground">· chỉ có thể gia hạn</span>}
+                      </p>
+                    ) : (
+                      <p className="flex items-center gap-1.5 text-xs text-primary">
+                        <CircleDashed className="size-3.5 shrink-0" /> Thời gian đang là mặc định, chưa được xác nhận.
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-1.5">
+                      {!step.confirmed && (
+                        <Button size="sm" onClick={() => openChange(step.id, "confirm")}>
+                          <BadgeCheck /> Xác nhận timeline
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => openChange(step.id, "extend")} className="text-amber-700 dark:text-amber-300">
                         <CalendarPlus /> Gia hạn
                       </Button>
-                      {!canEdit && (
+                      {!canEdit && !step.confirmed && (
                         <Button size="sm" variant="outline" onClick={() => openChange(step.id, "duration")}>
                           <PencilLine /> Sửa số ngày
+                        </Button>
+                      )}
+                      {canEdit && step.confirmed && (
+                        <Button size="sm" variant="ghost" onClick={() => patch({ confirmed: null })} title="Chỉ admin: mở lại để xác nhận lại">
+                          Bỏ chốt
                         </Button>
                       )}
                     </div>

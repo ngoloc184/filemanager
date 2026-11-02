@@ -7,7 +7,8 @@ import { roleKey, type ReminderKind } from "@/lib/workflow/reminders";
 export interface SentReminder {
   id: string;
   stepId: string;
-  kind: ReminderKind;
+  kind: ReminderKind | "confirm";
+  roleName: string | null;
   manual: boolean;
   recipients: string[];
   createdAt: string;
@@ -15,7 +16,8 @@ export interface SentReminder {
 
 export interface RemindResult {
   stepId: string;
-  kind: ReminderKind;
+  kind: ReminderKind | "confirm";
+  roleName?: string;
   sent: number;
   skipped?: "no-recipients" | "already-sent" | "failed";
 }
@@ -33,13 +35,13 @@ export function useReminders(workflowId: string, enabled: boolean) {
     const supabase = createClient();
     const [contacts, reminders] = await Promise.all([
       supabase.from("workflow_role_contacts").select("id, role_name, emails"),
-      supabase.from("workflow_reminders").select("id, step_id, kind, manual, recipients, created_at").eq("workflow_id", workflowId).order("created_at", { ascending: false }).limit(500),
+      supabase.from("workflow_reminders").select("id, step_id, kind, role_name, manual, recipients, created_at").eq("workflow_id", workflowId).order("created_at", { ascending: false }).limit(500),
     ]);
     type ContactRow = { id: string; role_name: string; emails: string[] };
-    type ReminderRow = { id: string; step_id: string; kind: ReminderKind; manual: boolean; recipients: string[]; created_at: string };
+    type ReminderRow = { id: string; step_id: string; kind: ReminderKind | "confirm"; role_name: string | null; manual: boolean; recipients: string[]; created_at: string };
     if (!contacts.error) setDirectory(new Map(((contacts.data ?? []) as ContactRow[]).map((r) => [roleKey(r.role_name), { id: r.id, emails: r.emails }])));
     if (!reminders.error)
-      setSent(((reminders.data ?? []) as ReminderRow[]).map((r) => ({ id: r.id, stepId: r.step_id, kind: r.kind, manual: r.manual, recipients: r.recipients, createdAt: r.created_at })));
+      setSent(((reminders.data ?? []) as ReminderRow[]).map((r) => ({ id: r.id, stepId: r.step_id, kind: r.kind, roleName: r.role_name, manual: r.manual, recipients: r.recipients, createdAt: r.created_at })));
   }, [workflowId, enabled]);
 
   useEffect(() => {
@@ -61,14 +63,14 @@ export function useReminders(workflowId: string, enabled: boolean) {
     [directory, reload]
   );
 
-  /** "Nhắc ngay" for one step, or for every step due a reminder today. */
+  /** "Nhắc ngay" for one step, every step due a reminder today (null), or confirmation requests. */
   const remind = useCallback(
-    async (stepId: string | null): Promise<{ results: RemindResult[] } | { error: string }> => {
+    async (target: { stepId: string } | { confirm: true } | null): Promise<{ results: RemindResult[] } | { error: string }> => {
       try {
         const res = await fetch(`/api/workflows/${workflowId}/remind`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(stepId ? { stepId } : {}),
+          body: JSON.stringify(target ?? {}),
         });
         const body = await res.json().catch(() => null);
         if (!res.ok) return { error: (body as { error?: string } | null)?.error ?? "Không gửi được nhắc nhở" };

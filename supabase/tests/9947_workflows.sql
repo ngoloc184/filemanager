@@ -99,7 +99,11 @@ select pg_temp.check((select count(*) from public.workflows) = 0, 'Bob does not 
 select pg_temp.check(
   pg_temp.row_count(format('update public.workflows set name = %L where id = %L', 'hacked', '3f000000-0000-0000-0000-000000000001')) = 0,
   'nor change it');
-select pg_temp.check(public.join_workflow(:W) = 'editor', 'opening the link makes Bob an editor');
+select pg_temp.check(public.join_workflow(:W) = 'member', 'opening the link makes Bob a member');
+-- the owner makes him an admin (202608280050), so he may edit the plan below
+select pg_temp.login(:A);
+select public.set_workflow_admin(:W, :B, true);
+select pg_temp.login(:B);
 select pg_temp.check(public.join_workflow('3f000000-0000-0000-0000-0000000000ff') is null, 'an unknown plan returns null');
 select pg_temp.check((select count(*) from public.workflows) = 1, 'Bob now sees the plan');
 select pg_temp.check((select count(*) from public.workflow_members) = 1, 'Bob only sees his own membership');

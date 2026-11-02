@@ -59,7 +59,7 @@ function reducer(state: State, action: Action): State {
 }
 
 export interface ChangeInput {
-  kind: "extend" | "duration";
+  kind: "extend" | "duration" | "confirm";
   stepId: string;
   amount: number;
   unit: DurationUnit;

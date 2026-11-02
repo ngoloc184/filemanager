@@ -43,6 +43,7 @@ const step = (id: string, amount: number, unit: "h" | "d" = "d", extra: Partial<
   duration: { amount, unit },
   status: "todo",
   position: { x: 0, y: 0 },
+  confirmed: null,
   ...extra,
 });
 const edge = (source: string, target: string): WorkflowEdge => ({ id: `e_${source}_${target}`, source, target });
@@ -244,6 +245,11 @@ describe("parseDoc", () => {
     assert.deepEqual(d.edges.map((e) => `${e.source}>${e.target}`), ["a>b"]);
   });
 
+  it("keeps a confirmation and drops a malformed one", () => {
+    const d = parseDoc({ steps: [{ id: "a", confirmed: { at: "2026-11-02T01:00:00Z", by: "Lan", role: "QC" } }, { id: "b", confirmed: "yes" }] }, "2026-11-02");
+    assert.deepEqual(d?.steps.map((s) => s.confirmed), [{ at: "2026-11-02T01:00:00Z", by: "Lan", role: "QC" }, null]);
+  });
+
   it("rejects non-plans", () => {
     assert.equal(parseDoc(null, "2026-11-02"), null);
     assert.equal(parseDoc([], "2026-11-02"), null);
@@ -272,9 +278,10 @@ describe("example and copies", () => {
   it("clones a plan for another feature with fresh statuses", () => {
     const d = exampleDoc("2026-11-02");
     d.steps[0].status = "done";
+    d.steps[1].confirmed = { at: "2026-11-02T01:00:00Z", by: "Lan", role: "QC" };
     const c = cloneDoc(d, { name: "Quy trình gốc" }, defaultStart("2026-12-01"));
     assert.equal(c.start, "2026-12-01T08:00");
-    assert.ok(c.steps.every((s) => s.status === "todo"));
+    assert.ok(c.steps.every((s) => s.status === "todo" && s.confirmed === null));
     assert.deepEqual(c.clonedFrom, { name: "Quy trình gốc" }); // no id: it would open the source
     assert.equal(d.steps[0].status, "done"); // the source is untouched
   });

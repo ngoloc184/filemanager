@@ -5,6 +5,14 @@ import { dayMark, minutesPerDay, normalizeStart, workBetween, type Slot, type Wo
 /** upcoming: starts on the next working day · due: ends today · overdue · progress: running (sent by hand) */
 export type ReminderKind = "upcoming" | "due" | "overdue" | "progress";
 
+/** Steps whose timeline is not confirmed yet, grouped by PIC role (done steps need nothing). */
+export function confirmDigests(doc: WorkflowDoc): { roleId: string; roleName: string; stepIds: string[] }[] {
+  return doc.roles.flatMap((role) => {
+    const stepIds = doc.steps.filter((s) => s.status !== "done" && s.confirmed === null && s.picIds.includes(role.id)).map((s) => s.id);
+    return stepIds.length ? [{ roleId: role.id, roleName: role.name, stepIds }] : [];
+  });
+}
+
 const DAY = 1440;
 
 /** The plan's wall-clock time now in a time zone (the plans are written in local time). */
@@ -167,6 +175,71 @@ ${rows.map(([k, v]) => `<tr><td style="padding:8px 12px;background:#f9fafb;borde
 </table>
 <p style="margin:0 0 20px;font-size:15px;line-height:1.6">${escape(ask[kind])}</p>
 <p style="margin:0 0 20px"><a href="${escape(link)}" style="display:inline-block;background:${accent};color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:600">Mở workflow</a></p>
+${by ? `<p style="margin:0 0 16px;font-size:13px;color:#6b7280">${escape(by)}</p>` : ""}
+<p style="margin:0;font-size:15px;line-height:1.6">Trân trọng cảm ơn sự phối hợp của Quý Anh/Chị.<br><br>Trân trọng,<br><strong>Hệ thống Workflow</strong></p>
+</td></tr>
+<tr><td style="padding:14px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af">${escape(footer)}</td></tr>
+</table></td></tr></table></body></html>`;
+
+  return { subject, text, html };
+}
+
+/** The e-mail asking one role to check and confirm the timeline of its steps (one per role). */
+export function buildConfirmEmail(input: {
+  workflowName: string;
+  doc: WorkflowDoc;
+  roleName: string;
+  steps: { step: WorkflowStep; slot: Slot }[];
+  link: string;
+  sentBy?: string;
+}): { subject: string; text: string; html: string } {
+  const { workflowName, doc, roleName, steps, link, sentBy } = input;
+  const subject = `[Xác nhận timeline] ${workflowName}: ${steps.length} bước của nhóm ${roleName} cần xác nhận`;
+  const greeting = `Kính gửi Quý Anh/Chị thuộc nhóm ${roleName},`;
+  const lead = `Hệ thống Workflow trân trọng đề nghị Quý Anh/Chị kiểm tra và xác nhận thời gian thực hiện của ${steps.length} bước dưới đây trong quy trình “${workflowName}”. Thời gian hiện tại là giá trị mặc định và chưa được nhóm xác nhận.`;
+  const ask =
+    "Kính đề nghị Quý Anh/Chị mở workflow, điều chỉnh số ngày/giờ nếu cần, rồi bấm “Xác nhận” ở từng bước. Sau khi xác nhận, thời gian của bước được chốt và chỉ có thể thay đổi bằng hình thức gia hạn kèm lý do.";
+  const lines = steps.map(({ step, slot }) => {
+    const n = doc.steps.indexOf(step) + 1;
+    const length = `${step.duration.amount} ${step.duration.unit === "d" ? "ngày" : "giờ"}`;
+    return { n, title: step.title.trim() || "(chưa đặt tên)", length, start: longMoment(slot.start), end: longMoment(slot.end) };
+  });
+  const by = sentBy ? `Lời nhắc này được gửi theo yêu cầu của ${sentBy}.` : "";
+  const footer = "Đây là email tự động từ hệ thống Workflow, vui lòng không trả lời email này.";
+
+  const text = [
+    greeting,
+    "",
+    lead,
+    "",
+    ...lines.map((l) => `• Bước ${l.n}: ${l.title}\n  Thời lượng: ${l.length} · Bắt đầu: ${l.start} · Hạn: ${l.end}`),
+    "",
+    ask,
+    `Mở workflow: ${link}`,
+    ...(by ? ["", by] : []),
+    "",
+    "Trân trọng cảm ơn sự phối hợp của Quý Anh/Chị.",
+    "",
+    "Trân trọng,",
+    "Hệ thống Workflow",
+    "",
+    `— ${footer}`,
+  ].join("\n");
+
+  const accent = "#6d28d9";
+  const html = `<!doctype html><html lang="vi"><body style="margin:0;background:#f4f4f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1f2937">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;padding:24px 12px"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
+<tr><td style="background:${accent};color:#ffffff;padding:14px 24px;font-size:13px;font-weight:600;letter-spacing:.02em">XÁC NHẬN TIMELINE</td></tr>
+<tr><td style="padding:24px">
+<p style="margin:0 0 12px;font-size:15px">${escape(greeting)}</p>
+<p style="margin:0 0 16px;font-size:15px;line-height:1.6">${escape(lead)}</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;margin:0 0 16px">
+<tr style="background:#f9fafb;color:#6b7280"><td style="padding:8px 10px;border:1px solid #e5e7eb">Bước</td><td style="padding:8px 10px;border:1px solid #e5e7eb">Thời lượng</td><td style="padding:8px 10px;border:1px solid #e5e7eb">Bắt đầu → Hạn</td></tr>
+${lines.map((l) => `<tr><td style="padding:8px 10px;border:1px solid #e5e7eb;vertical-align:top"><strong>${l.n}.</strong> ${escape(l.title)}</td><td style="padding:8px 10px;border:1px solid #e5e7eb;vertical-align:top;white-space:nowrap;font-weight:600">${escape(l.length)}</td><td style="padding:8px 10px;border:1px solid #e5e7eb;vertical-align:top">${escape(l.start)}<br>→ ${escape(l.end)}</td></tr>`).join("\n")}
+</table>
+<p style="margin:0 0 20px;font-size:15px;line-height:1.6">${escape(ask)}</p>
+<p style="margin:0 0 20px"><a href="${escape(link)}" style="display:inline-block;background:${accent};color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:600">Mở workflow để xác nhận</a></p>
 ${by ? `<p style="margin:0 0 16px;font-size:13px;color:#6b7280">${escape(by)}</p>` : ""}
 <p style="margin:0;font-size:15px;line-height:1.6">Trân trọng cảm ơn sự phối hợp của Quý Anh/Chị.<br><br>Trân trọng,<br><strong>Hệ thống Workflow</strong></p>
 </td></tr>

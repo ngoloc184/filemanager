@@ -15,7 +15,8 @@ function fail(error: string, status: number) {
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 /**
- * Extends a step ("extend") or changes its length ("duration"), for anyone with the link.
+ * Extends a step ("extend"), changes the length of an unconfirmed step ("duration") or confirms
+ * its timeline, possibly with a new length ("confirm"), for anyone with the link.
  * Both are logged on the step with the name and role the person typed; a signed-in caller is
  * recorded as such. Returns the plan as GET does.
  */
@@ -35,7 +36,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
   // a hidden field people never fill: bots that fill every input are dropped quietly
   if (text(body.website, 200)) return fail("Dữ liệu không hợp lệ", 400);
 
-  const kind = body.kind === "extend" || body.kind === "duration" ? body.kind : null;
+  const kind = body.kind === "extend" || body.kind === "duration" || body.kind === "confirm" ? body.kind : null;
   const amount = typeof body.amount === "number" && Number.isInteger(body.amount) ? body.amount : NaN;
   const unit = body.unit === "h" || body.unit === "d" ? body.unit : null;
   const reason = text(body.reason, LIMITS.reason);
@@ -61,6 +62,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
     });
     if (error) {
       if (error.code === "PT404") return fail("Không tìm thấy bước này, có thể nó vừa bị xoá", 404);
+      if (error.code === "PT409") return fail("Timeline của bước này đã được chốt, chỉ có thể gia hạn", 409);
       if (error.code === "PT429") return fail("Có quá nhiều yêu cầu, hãy thử lại sau ít phút", 429);
       return fail("Không lưu được thay đổi", 400);
     }

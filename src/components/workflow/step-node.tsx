@@ -3,7 +3,7 @@
 import { memo } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { CalendarPlus, Clock3, History, PencilLine } from "lucide-react";
+import { BadgeCheck, CalendarPlus, Clock3, History, Lock, PencilLine } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dayMark, isOverdue, updateStep } from "@/lib/workflow/model";
 import { useWorkflow } from "./context";
@@ -37,13 +37,18 @@ function StepNodeView({ data, selected }: NodeProps<StepFlowNode>) {
   const historyCount = logs.filter((l) => l.stepId === step.id).length;
   const extended = !!slot && slot.extraMinutes > 0;
   const faded = focusRoleId !== null && !step.picIds.includes(focusRoleId);
+  const confirmed = step.confirmed;
 
   const durationText = (
     <>
       <Clock3 className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="font-semibold">{durationLabel(step.duration)}</span>
       {extended && <span className="font-medium text-amber-700 dark:text-amber-300">+{minutesLabel(slot.extraMinutes, doc.hours)}</span>}
-      <PencilLine className="size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+      {canEdit || !confirmed ? (
+        <PencilLine className="size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+      ) : (
+        <Lock className="size-3 text-muted-foreground" aria-label="Đã chốt" />
+      )}
     </>
   );
   const durationClass = "nodrag nopan -mx-1 flex items-center gap-1.5 rounded px-1 outline-none hover:bg-background focus-visible:ring-2 focus-visible:ring-ring/50";
@@ -83,7 +88,7 @@ function StepNodeView({ data, selected }: NodeProps<StepFlowNode>) {
 
         <PicPicker step={step} />
 
-        <div className={cn("grid gap-1 rounded-lg px-2 py-1.5 text-xs", late ? "bg-rose-500/8" : "bg-muted/60")}>
+        <div className={cn("grid gap-1 rounded-lg px-2 py-1.5 text-xs", late ? "bg-rose-500/8" : "bg-muted/60", !confirmed && !late && "outline-1 outline-dashed outline-primary/35")}>
           <div className="flex items-center gap-1.5">
             {canEdit ? (
               <Popover.Root>
@@ -99,6 +104,10 @@ function StepNodeView({ data, selected }: NodeProps<StepFlowNode>) {
                   </Popover.Positioner>
                 </Popover.Portal>
               </Popover.Root>
+            ) : confirmed ? (
+              <span className="-mx-1 flex items-center gap-1.5 px-1" title="Timeline đã chốt: chỉ có thể gia hạn">
+                {durationText}
+              </span>
             ) : (
               <button type="button" onClick={() => openChange(step.id, "duration")} aria-label="Sửa số ngày" className={durationClass}>
                 {durationText}
@@ -118,14 +127,18 @@ function StepNodeView({ data, selected }: NodeProps<StepFlowNode>) {
         </div>
 
         <div className="-mx-1 flex items-center gap-0.5">
+          {confirmed ? (
+            <span className="inline-flex h-7 items-center gap-1 px-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400" title={`Chốt bởi ${confirmed.by} (${confirmed.role})`}>
+              <BadgeCheck className="size-3.5" /> Đã chốt
+            </span>
+          ) : (
+            <button type="button" onClick={() => openChange(step.id, "confirm")} className="nodrag nopan inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-primary hover:bg-primary/10" title="Timeline đang là mặc định, chưa được xác nhận">
+              <BadgeCheck className="size-3.5" /> Xác nhận
+            </button>
+          )}
           <button type="button" onClick={() => openChange(step.id, "extend")} className="nodrag nopan inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-amber-700 hover:bg-amber-500/10 dark:text-amber-300">
             <CalendarPlus className="size-3.5" /> Gia hạn
           </button>
-          {!canEdit && (
-            <button type="button" onClick={() => openChange(step.id, "duration")} className="nodrag nopan inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
-              <PencilLine className="size-3.5" /> Sửa số ngày
-            </button>
-          )}
           <button
             type="button"
             onClick={() => openStep(step.id, "history")}

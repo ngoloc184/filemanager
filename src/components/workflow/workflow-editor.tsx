@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
   Network,
   Redo2,
+  ShieldCheck,
   Trash2,
   Undo2,
   Users,
@@ -46,6 +47,7 @@ import { ROLE_STYLE, fullMoment, mark, minutesLabel } from "./styles";
 import { useWorkflowSync, type ChangeInput, type SaveStatus } from "./use-workflow-sync";
 import { useReminders } from "./use-reminders";
 import { RemindDialog } from "./remind-dialog";
+import { MembersDialog } from "./members-dialog";
 
 // React Flow measures the DOM, so the canvas renders in the browser only
 const WorkflowCanvas = dynamic(() => import("./workflow-canvas").then((m) => m.WorkflowCanvas), {
@@ -71,17 +73,20 @@ const STATUS_TEXT: Record<SaveStatus, { text: string; icon: typeof Check; classN
 export interface EditorProps {
   id: string;
   initial: Loaded;
+  /** owner or admin of the plan */
   canEdit: boolean;
   isOwner: boolean;
+  signedIn: boolean;
   /** prefills "Họ tên" in the change form */
   viewerName: string;
 }
 
-export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: EditorProps) {
+export function WorkflowEditor({ id, initial, canEdit, isOwner, signedIn, viewerName }: EditorProps) {
   const router = useRouter();
   const sync = useWorkflowSync(id, initial, canEdit);
   const reminders = useReminders(id, canEdit);
   const [remindOpen, setRemindOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
   const { doc, name, logs, edit, undo, redo } = sync;
   const [view, setView] = useState<View>("flow");
   const [now, setNow] = useState(() => nowMinutes());
@@ -133,8 +138,8 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: Ed
   const openRoles = useCallback(() => setRolesOpen(true), []);
 
   const ctx = useMemo<WorkflowContextValue>(
-    () => ({ workflowId: id, doc, logs, slots, now, canEdit, focusRoleId: focusRole, edit, openStep: openStepPanel, openChange, openRoles, reminders: canEdit ? reminders : null }),
-    [id, doc, logs, slots, now, canEdit, focusRole, edit, openStepPanel, openChange, openRoles, reminders]
+    () => ({ workflowId: id, doc, logs, slots, now, canEdit, signedIn, focusRoleId: focusRole, edit, openStep: openStepPanel, openChange, openRoles, reminders: canEdit ? reminders : null }),
+    [id, doc, logs, slots, now, canEdit, signedIn, focusRole, edit, openStepPanel, openChange, openRoles, reminders]
   );
 
   const range = planRange(slots);
@@ -143,6 +148,7 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: Ed
   let extra = 0;
   for (const s of slots.values()) extra += s.extraMinutes;
   const pct = doc.steps.length ? Math.round((done / doc.steps.length) * 100) : 0;
+  const confirmedCount = doc.steps.filter((s) => s.confirmed).length;
   const status = STATUS_TEXT[sync.status];
 
   async function copyLink() {
@@ -190,7 +196,7 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: Ed
         {/* ------------------------------------------------ header */}
         <header className="z-30 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background/90 px-3 py-2 backdrop-blur sm:px-4">
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            {canEdit ? (
+            {signedIn ? (
               <Link href="/workflow" aria-label="Danh sách workflow" className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
                 <ChevronLeft className="size-4" />
               </Link>
@@ -262,9 +268,9 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: Ed
                   <BellRing /> <span className="hidden md:inline">Nhắc nhở</span>
                 </Button>
               </>
-            ) : (
+            ) : signedIn ? null : (
               <Button variant="outline" size="sm" render={<Link href={`/login?next=${encodeURIComponent(`/workflow/${id}`)}`} />}>
-                <LogIn /> <span className="hidden sm:inline">Đăng nhập để chỉnh sửa</span>
+                <LogIn /> <span className="hidden sm:inline">Đăng nhập</span>
               </Button>
             )}
             <Button size="sm" onClick={copyLink}>
@@ -274,6 +280,9 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: Ed
               <DropdownMenu>
                 <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Thêm thao tác"><MoreHorizontal /></Button>} />
                 <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={() => setMembersOpen(true)}>
+                    <ShieldCheck /> Thành viên & admin
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setHoursOpen(true)}>
                     <Clock /> Giờ làm việc
                   </DropdownMenuItem>
@@ -298,7 +307,9 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: Ed
         {!canEdit && (
           <div className="flex items-center gap-2 border-b bg-amber-500/8 px-3 py-1.5 text-xs text-amber-900 sm:px-4 dark:text-amber-200">
             <CalendarClock className="size-3.5 shrink-0" />
-            Bạn đang xem với tư cách khách: có thể <b>gia hạn</b> hoặc <b>sửa số ngày</b> của từng bước (cần nêu họ tên, vai trò). Mọi thay đổi được ghi lịch sử.
+            <span>
+              {signedIn ? "Bạn là thành viên (không phải admin) của workflow này." : "Bạn đang xem với tư cách khách."} Bạn có thể <b>sửa số ngày</b> và <b>xác nhận timeline</b> của bước chưa chốt, và <b>gia hạn</b> mọi bước. Mọi thay đổi được ghi lịch sử.
+            </span>
           </div>
         )}
 
@@ -320,6 +331,9 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: Ed
             <span className="tabular-nums text-muted-foreground">
               {done}/{doc.steps.length} xong
             </span>
+          </span>
+          <span className={cn("rounded-md px-1.5 py-0.5 font-medium", confirmedCount === doc.steps.length ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>
+            {confirmedCount}/{doc.steps.length} bước đã chốt timeline
           </span>
           {extra > 0 && <span className="rounded-md bg-amber-500/12 px-1.5 py-0.5 font-medium text-amber-800 dark:text-amber-300">Gia hạn +{minutesLabel(extra, doc.hours)}</span>}
           {late > 0 && <span className="rounded-md bg-rose-500/10 px-1.5 py-0.5 font-medium text-rose-700 dark:text-rose-300">{late} bước trễ hạn</span>}
@@ -353,6 +367,7 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: Ed
             <HoursDialog open={hoursOpen} onOpenChange={setHoursOpen} />
             <CloneDialog source={{ name, doc }} open={cloneOpen} onOpenChange={setCloneOpen} />
             <RemindDialog open={remindOpen} onOpenChange={setRemindOpen} />
+            <MembersDialog workflowId={id} isOwner={isOwner} open={membersOpen} onOpenChange={setMembersOpen} />
           </>
         )}
 

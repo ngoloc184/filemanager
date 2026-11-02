@@ -13,8 +13,8 @@ export async function generateMetadata({ params }: PageProps<"/workflow/[id]">):
 }
 
 /**
- * A plan, for anyone with the link. Signed-in visitors join it as editors and may change
- * everything; others may extend a step or change its length (logged with their name and role).
+ * A plan, for anyone with the link. Its owner and admins change everything; everyone else (signed
+ * in or not) may change an unconfirmed length, confirm a timeline and extend, all logged.
  */
 export default async function WorkflowPage({ params }: PageProps<"/workflow/[id]">) {
   const { id } = await params;
@@ -37,5 +37,5 @@ export default async function WorkflowPage({ params }: PageProps<"/workflow/[id]
   const initial = payload ? readPayload(payload) : null;
   if (!payload || !initial) notFound();
 
-  return <WorkflowEditor id={id} initial={initial} canEdit={role !== null} isOwner={role === "owner"} viewerName={viewerName} />;
+  return <WorkflowEditor id={id} initial={initial} canEdit={role === "owner" || role === "admin"} isOwner={role === "owner"} signedIn={!!user} viewerName={viewerName} />;
 }

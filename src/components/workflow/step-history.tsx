@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BadgeCheck, CalendarPlus, Clock3, Undo2 } from "lucide-react";
+import { ArrowRight, BadgeCheck, CalendarPlus, Clock3, Lock, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { StepLog } from "@/lib/workflow/model";
@@ -9,19 +9,20 @@ import { durationLabel, logTime } from "./styles";
 /** The log of one step, newest first: extensions and length changes, with who and why. */
 export function StepHistory({ logs, onCancel }: { logs: StepLog[]; onCancel?: (id: string) => Promise<boolean> }) {
   if (!logs.length) {
-    return <p className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">Chưa có gia hạn hay thay đổi thời lượng nào.</p>;
+    return <p className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">Chưa có thay đổi, xác nhận hay gia hạn nào.</p>;
   }
   return (
     <ol className="relative grid gap-3 before:absolute before:inset-y-2 before:left-[13px] before:w-px before:bg-border">
       {[...logs].reverse().map((l) => {
         const extend = l.kind === "extend";
-        const Icon = extend ? CalendarPlus : Clock3;
+        const confirm = l.kind === "confirm";
+        const Icon = extend ? CalendarPlus : confirm ? Lock : Clock3;
         return (
           <li key={l.id} className={cn("relative flex gap-3", l.cancelledAt && "opacity-60")}>
             <span
               className={cn(
                 "relative z-10 grid size-7 shrink-0 place-items-center rounded-full ring-4 ring-popover",
-                extend ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                extend ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : confirm ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
               )}
             >
               <Icon className="size-3.5" />
@@ -31,6 +32,8 @@ export function StepHistory({ logs, onCancel }: { logs: StepLog[]; onCancel?: (i
                 <span className={cn("font-semibold", l.cancelledAt && "line-through")}>
                   {extend ? (
                     `Gia hạn +${durationLabel({ amount: l.amount, unit: l.unit })}`
+                  ) : confirm ? (
+                    `Chốt timeline: ${durationLabel({ amount: l.amount, unit: l.unit })}`
                   ) : (
                     <span className="inline-flex items-center gap-1">
                       {l.oldAmount && l.oldUnit ? durationLabel({ amount: l.oldAmount, unit: l.oldUnit }) : "?"}

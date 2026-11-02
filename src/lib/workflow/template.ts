@@ -43,6 +43,7 @@ export function exampleDoc(today: string): WorkflowDoc {
     duration: { amount: days, unit: "d" },
     status: "todo",
     position: { x: 0, y: 0 },
+    confirmed: null,
   }));
   doc.edges = steps.slice(1).map((s, i) => ({ id: `e_${steps[i].id}_${s.id}`, source: steps[i].id, target: s.id }));
   doc.steps = autoLayout(steps, doc.edges);

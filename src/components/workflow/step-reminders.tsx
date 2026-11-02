@@ -22,7 +22,7 @@ export function StepReminders({ step }: { step: WorkflowStep }) {
   async function remind() {
     if (!reminders) return;
     setBusy(true);
-    const r = await reminders.remind(step.id);
+    const r = await reminders.remind({ stepId: step.id });
     setBusy(false);
     if ("error" in r) return void toast.error(r.error);
     reportResults(r.results);
