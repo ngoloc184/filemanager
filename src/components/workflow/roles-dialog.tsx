@@ -8,9 +8,10 @@ import { cn } from "@/lib/utils";
 import { LIMITS, ROLE_COLORS, newId, type RoleColor } from "@/lib/workflow/model";
 import { useWorkflow } from "./context";
 import { ROLE_STYLE } from "./styles";
+import { EmailChips } from "./email-chips";
 
 export function RolesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { doc: wf, edit } = useWorkflow();
+  const { doc: wf, edit, reminders } = useWorkflow();
   const [name, setName] = useState("");
   const count = (id: string) => wf.steps.filter((s) => s.picIds.includes(id)).length;
   const setRole = (id: string, fields: { name?: string; color?: RoleColor }, key: string | null = null) =>
@@ -27,15 +28,16 @@ export function RolesDialog({ open, onOpenChange }: { open: boolean; onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Vai trò (PIC)</DialogTitle>
-          <DialogDescription>Mỗi bước có thể giao cho một hoặc nhiều vai trò. Màu vai trò được dùng trên sơ đồ và timeline.</DialogDescription>
+          <DialogDescription>Mỗi bước có thể giao cho một hoặc nhiều vai trò. Email của vai trò dùng để gửi nhắc việc; danh bạ email dùng chung cho mọi workflow có vai trò cùng tên.</DialogDescription>
         </DialogHeader>
 
-        <ul className="grid max-h-80 gap-1.5 overflow-y-auto">
+        <ul className="grid max-h-[55vh] gap-1.5 overflow-y-auto">
           {wf.roles.map((r) => (
-            <li key={r.id} className="flex items-center gap-2 rounded-lg p-1.5 ring-1 ring-border">
+            <li key={r.id} className="grid gap-1.5 rounded-lg p-1.5 ring-1 ring-border">
+              <div className="flex items-center gap-2">
               <div className="flex shrink-0 gap-0.5" role="radiogroup" aria-label={`Màu của ${r.name}`}>
                 {ROLE_COLORS.map((c) => (
                   <button
@@ -74,6 +76,8 @@ export function RolesDialog({ open, onOpenChange }: { open: boolean; onOpenChang
               >
                 <Trash2 />
               </Button>
+              </div>
+              {reminders && <EmailChips roleName={r.name} emails={reminders.emailsFor(r.name)} onSave={(emails) => reminders.setRoleEmails(r.name, emails)} />}
             </li>
           ))}
           {!wf.roles.length && <li className="rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground">Chưa có vai trò nào.</li>}

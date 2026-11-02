@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 import type { Slot, StepLog, WorkflowDoc } from "@/lib/workflow/model";
 import type { ChangeInput } from "./use-workflow-sync";
+import type { Reminders } from "./use-reminders";
 
 /** What every part of the editor reads: the plan, its schedule and what the viewer may do. */
 export interface WorkflowContextValue {
@@ -21,6 +22,8 @@ export interface WorkflowContextValue {
   /** opens the logged form: extend, or change the length (viewers) */
   openChange: (stepId: string, kind: ChangeInput["kind"]) => void;
   openRoles: () => void;
+  /** the role e-mail directory and reminders: signed-in members only */
+  reminders: Reminders | null;
 }
 
 const Ctx = createContext<WorkflowContextValue | null>(null);

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  BellRing,
   CalendarClock,
   Check,
   ChevronLeft,
@@ -43,6 +44,8 @@ import { CloneDialog } from "./clone-dialog";
 import { HoursDialog } from "./hours-dialog";
 import { ROLE_STYLE, fullMoment, mark, minutesLabel } from "./styles";
 import { useWorkflowSync, type ChangeInput, type SaveStatus } from "./use-workflow-sync";
+import { useReminders } from "./use-reminders";
+import { RemindDialog } from "./remind-dialog";
 
 // React Flow measures the DOM, so the canvas renders in the browser only
 const WorkflowCanvas = dynamic(() => import("./workflow-canvas").then((m) => m.WorkflowCanvas), {
@@ -77,6 +80,8 @@ export interface EditorProps {
 export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: EditorProps) {
   const router = useRouter();
   const sync = useWorkflowSync(id, initial, canEdit);
+  const reminders = useReminders(id, canEdit);
+  const [remindOpen, setRemindOpen] = useState(false);
   const { doc, name, logs, edit, undo, redo } = sync;
   const [view, setView] = useState<View>("flow");
   const [now, setNow] = useState(() => nowMinutes());
@@ -128,8 +133,8 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: Ed
   const openRoles = useCallback(() => setRolesOpen(true), []);
 
   const ctx = useMemo<WorkflowContextValue>(
-    () => ({ workflowId: id, doc, logs, slots, now, canEdit, focusRoleId: focusRole, edit, openStep: openStepPanel, openChange, openRoles }),
-    [id, doc, logs, slots, now, canEdit, focusRole, edit, openStepPanel, openChange, openRoles]
+    () => ({ workflowId: id, doc, logs, slots, now, canEdit, focusRoleId: focusRole, edit, openStep: openStepPanel, openChange, openRoles, reminders: canEdit ? reminders : null }),
+    [id, doc, logs, slots, now, canEdit, focusRole, edit, openStepPanel, openChange, openRoles, reminders]
   );
 
   const range = planRange(slots);
@@ -253,6 +258,9 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: Ed
                 <Button variant="outline" size="sm" onClick={() => setCloneOpen(true)}>
                   <Copy /> <span className="hidden md:inline">Nhân bản</span>
                 </Button>
+                <Button variant="outline" size="sm" onClick={() => setRemindOpen(true)}>
+                  <BellRing /> <span className="hidden md:inline">Nhắc nhở</span>
+                </Button>
               </>
             ) : (
               <Button variant="outline" size="sm" render={<Link href={`/login?next=${encodeURIComponent(`/workflow/${id}`)}`} />}>
@@ -344,6 +352,7 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, viewerName }: Ed
             <RolesDialog open={rolesOpen} onOpenChange={setRolesOpen} />
             <HoursDialog open={hoursOpen} onOpenChange={setHoursOpen} />
             <CloneDialog source={{ name, doc }} open={cloneOpen} onOpenChange={setCloneOpen} />
+            <RemindDialog open={remindOpen} onOpenChange={setRemindOpen} />
           </>
         )}
 

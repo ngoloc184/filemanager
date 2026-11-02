@@ -9,6 +9,7 @@ import { useWorkflow } from "./context";
 import { DurationField } from "./duration-editor";
 import { RoleChip } from "./pic-picker";
 import { StepHistory } from "./step-history";
+import { StepReminders } from "./step-reminders";
 import { ROLE_STYLE, STATUS_META, durationLabel, fullMoment, mark, minutesLabel } from "./styles";
 
 const FIELD = "w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -185,6 +186,8 @@ export function StepPanel({
                     </p>
                   )}
                 </section>
+
+                {canEdit && <StepReminders step={step} />}
 
                 {(canEdit || step.note) && (
                   <label className="grid gap-1.5">
