@@ -11,6 +11,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 - **Saved links**: A private list of useful URLs with a title (e.g. “Daily progress update”)
 - **Chat**: Real-time direct and group messages; text, files, emoji, stickers with Zalo-style suggestions, replies, @mentions, reactions, pinned messages, typing and “Seen”; groups with owner/admin roles, picture and background; display names and profile pictures; Web Push notifications on the device, also with the site closed ([docs/chat.md](docs/chat.md))
 - **Company & Documents (Văn bản)**: Companies with departments, positions, roles (admin, clerk, leader, department head, staff) and invitation links; incoming documents (register in a book with arrival numbers, present to a leader, assign lead/support/info with deadlines, report, complete) and outgoing/internal documents (approval chain, e-approval sign, issue with automatic numbers like 01/QĐ-ABC, recall, reply/replace/correct); inbox views, search, reports, deadline reminders, dossiers with retention and legal hold, offboarding that hands work to a successor ([docs/organization.md](docs/organization.md), [docs/documents.md](docs/documents.md), [docs/operations.md](docs/operations.md))
+- **Workflow builder (`/workflow`)**: Draw a process as connected steps with PIC roles and a length per step (hours or working days, 08:00–17:00, Saturday and Sunday off). Each step starts when the one before it ends, from day X of the plan, shown on a diagram and a timeline (Gantt). Signed-in users create, edit and clone plans (one per feature); anyone with the link, without signing in, can extend a step (gia hạn, with a reason) or change its length, giving a name and role. Every such change is logged on the step
 - **Notifications**: A bell with shares, comments and document events, also pushed to the device
 - **AI Agent**: Talk to your files in the chat (“Thêm file Hợp đồng.docx vào thư mục Kế toán”, “Xem thùng rác”, “Lưu link …”); asks for missing details, confirms every change, and learns new phrasings from all users — no LLM required ([docs/ai-agent.md](docs/ai-agent.md))
 - **File Management**: Download, view, and delete individual files
@@ -44,7 +45,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280046...`). The 030–046 set hardens
+   (`202608280001...` through `202608280047...`). The 030–046 set hardens
    security and adds the company layer:
    - `030_security_hardening`: drops the legacy storage policies, removes
      anonymous access to internal functions and limits push endpoints to
@@ -76,7 +77,9 @@ A modern web application for managing file uploads, built with Next.js, Supabase
      back from people it was sent to, and files added to a registered
      incoming document are locked like the ones registered with it;
    - `046_qa_fixes`: fixes from testing the live app (the Done view, report
-     counts, duplicate notifications, the result note in the history).
+     counts, duplicate notifications, the result note in the history);
+   - `047_workflows`: the workflow builder (plans, editors who join by link,
+     the per-step log of extensions and length changes).
 
    Deleting a user who still owns files now fails. Offboard them from the
    organization first, so their files are handed over.

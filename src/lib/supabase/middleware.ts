@@ -2,8 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Routes that are reachable without being signed in.
-const PUBLIC_PATHS = ["/"]; // landing page (exact match)
-const PUBLIC_PREFIXES = ["/login", "/register", "/forgot-password", "/auth/", "/api/auth", "/setup"];
+const PUBLIC_PATHS = ["/", "/workflow"]; // exact matches: landing page, workflow list
+// Workflow pages and their API serve anyone with a plan's link; a session (if any) unlocks editing.
+const PUBLIC_PREFIXES = ["/login", "/register", "/forgot-password", "/auth/", "/api/auth", "/setup", "/workflow/", "/api/workflows/"];
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
