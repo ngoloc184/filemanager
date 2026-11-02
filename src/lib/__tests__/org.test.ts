@@ -9,8 +9,10 @@ import {
   isOrgRole,
   isValidDepartmentCode,
   isValidOrgCode,
+  memberDetail,
   memberLabel,
   normalizeCode,
+  resultsFor,
   roleLabels,
   type DepartmentRow,
 } from "../org.ts";
@@ -90,6 +92,24 @@ describe("roles and labels", () => {
     assert.equal(memberLabel({ display_name: "  ", email: "bob@example.com" }), "bob@example.com");
     assert.equal(memberLabel({ display_name: null, email: "bob@example.com" }), "bob@example.com");
     assert.equal(memberLabel({}), "");
+  });
+
+  it("memberDetail shows the e-mail only when the label is not already the e-mail", () => {
+    const named = { display_name: "Bob Trần", email: "bob@example.com" };
+    assert.equal(memberDetail(named), "bob@example.com");
+    assert.equal(memberDetail(named, "IT", null), "bob@example.com · IT");
+    assert.equal(memberDetail({ display_name: null, email: "bob@example.com" }), "");
+    assert.equal(memberDetail({ display_name: "  ", email: "bob@example.com" }, "IT"), "IT");
+    assert.equal(memberDetail({ display_name: "Bob", email: null }, undefined), "");
+  });
+
+  it("resultsFor drops results that belong to another query", () => {
+    const results = { query: "qa-", items: ["alice", "dan"] };
+    assert.deepEqual(resultsFor(results, "qa-"), ["alice", "dan"]);
+    assert.equal(resultsFor(results, "qa-dan"), null);
+    assert.equal(resultsFor(results, ""), null);
+    assert.equal(resultsFor(null, ""), null);
+    assert.deepEqual(resultsFor({ query: "", items: [] }, ""), []);
   });
 });
 

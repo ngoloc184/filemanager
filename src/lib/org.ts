@@ -56,6 +56,29 @@ export function memberLabel(m: { display_name?: string | null; email?: string | 
   return m.display_name?.trim() || m.email || "";
 }
 
+/**
+ * Line shown under memberLabel(): the e-mail, unless the label already is the
+ * e-mail (no display name), then any extra parts, joined by " · ".
+ */
+export function memberDetail(
+  m: { display_name?: string | null; email?: string | null },
+  ...extra: (string | null | undefined)[]
+): string {
+  const email = m.display_name?.trim() ? m.email : null;
+  return [email, ...extra].filter(Boolean).join(" · ");
+}
+
+/** Search results tagged with the query they answer. */
+export type QueryResults<T> = { query: string; items: T[] };
+
+/**
+ * The results when they answer `query`, else null: results of an older query
+ * are stale and must not be shown or picked.
+ */
+export function resultsFor<T>(results: QueryResults<T> | null, query: string): T[] | null {
+  return results && results.query === query ? results.items : null;
+}
+
 export type DepartmentRow = {
   id: string;
   parent_id: string | null;

@@ -15,7 +15,8 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { CommandPalette, openCommandPalette } from "@/components/command-palette";
 import { AssistantWidget, clearAssistantHistory } from "@/components/assistant/assistant-widget";
 import { AiSummaryHost } from "@/components/files/ai-summary-dialog";
-import { NAV_ITEMS, isActive, type NavItem } from "@/components/navigation";
+import { ADMIN_NAV_ITEMS, ALL_NAV_ITEMS, COMPANY_NAV_ITEMS, NAV_ITEMS, isActive, type NavItem } from "@/components/navigation";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { ChatWidget } from "@/components/chat/chat-widget";
 import { UserAvatar } from "@/components/chat/user-avatar";
 import { ProfileDialog } from "@/components/profile/profile-dialog";
@@ -26,12 +27,31 @@ import { cn } from "@/lib/utils";
 interface DashboardLayoutProps {
   children: ReactNode;
   user: { id: string; email?: string };
+  /** the user belongs to a company (shows Documents) */
+  hasOrg: boolean;
+  /** the user is a site admin (shows the Admin section) */
+  isAdmin: boolean;
 }
 
-const SECTIONS: { title: string; items: readonly NavItem[] }[] = [
-  { title: "Workspace", items: NAV_ITEMS.slice(0, 5) },
-  { title: "Library", items: NAV_ITEMS.slice(5) },
-];
+type Section = { title: string; items: readonly NavItem[] };
+
+function navSections(hasOrg: boolean, isAdmin: boolean): Section[] {
+  return [
+    { title: "Workspace", items: NAV_ITEMS.slice(0, 5) },
+    { title: "Library", items: NAV_ITEMS.slice(5) },
+    // Organization stays visible so people can create or join a company
+    { title: "Company", items: hasOrg ? COMPANY_NAV_ITEMS : COMPANY_NAV_ITEMS.slice(1) },
+    ...(isAdmin ? [{ title: "Admin", items: ADMIN_NAV_ITEMS }] : []),
+  ];
+}
+
+/**
+ * Every page a title can come from. Admin pages count only for site admins:
+ * everyone else gets a 404 there, and the title must not name the page.
+ */
+function titleItems(isAdmin: boolean): readonly NavItem[] {
+  return isAdmin ? [...ALL_NAV_ITEMS, ...ADMIN_NAV_ITEMS] : ALL_NAV_ITEMS;
+}
 
 function ShortcutHint({ className }: { className?: string }) {
   return (
@@ -54,6 +74,7 @@ function SidebarContent({
   onProfile,
   onClose,
   indicatorId,
+  sections,
 }: {
   pathname: string;
   email?: string;
@@ -62,6 +83,7 @@ function SidebarContent({
   onProfile: () => void;
   onClose?: () => void;
   indicatorId: string;
+  sections: Section[];
 }) {
   const profile = useMyProfile();
   return (
@@ -96,7 +118,7 @@ function SidebarContent({
       </div>
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
-        {SECTIONS.map((section) => (
+        {sections.map((section) => (
           <div key={section.title}>
             <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
               {section.title}
@@ -180,7 +202,10 @@ function SidebarContent({
 export default function DashboardLayout({
   children,
   user,
+  hasOrg,
+  isAdmin,
 }: DashboardLayoutProps) {
+  const sections = navSections(hasOrg, isAdmin);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const router = useRouter();
@@ -196,19 +221,22 @@ export default function DashboardLayout({
     router.refresh();
   };
 
-  const current = NAV_ITEMS.find((item) => isActive(pathname, item.href));
+  const current = titleItems(isAdmin).find((item) => isActive(pathname, item.href));
 
   return (
     <div className="relative flex min-h-screen">
       <AuroraBackground variant="subtle" />
       <CommandPalette onSignOut={handleLogout} />
-      <AssistantWidget userId={user.id} />
-      <ChatWidget userId={user.id} email={user.email} />
+      {/* floating widgets stay off printed documents */}
+      <div className="print:hidden">
+        <AssistantWidget userId={user.id} />
+        <ChatWidget userId={user.id} email={user.email} />
+      </div>
       <AiSummaryHost />
       <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
 
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-[17rem] shrink-0 border-r bg-sidebar/60 backdrop-blur-2xl lg:block">
+      <aside className="sticky top-0 hidden h-screen w-[17rem] shrink-0 border-r bg-sidebar/60 backdrop-blur-2xl lg:block print:hidden">
         <SidebarContent
           pathname={pathname}
           email={user.email}
@@ -216,6 +244,7 @@ export default function DashboardLayout({
           onLogout={handleLogout}
           onProfile={() => setProfileOpen(true)}
           indicatorId="sidebar-active"
+          sections={sections}
         />
       </aside>
 
@@ -250,6 +279,7 @@ export default function DashboardLayout({
                 }}
                 onClose={() => setSidebarOpen(false)}
                 indicatorId="drawer-active"
+                sections={sections}
               />
             </motion.aside>
           </>
@@ -257,7 +287,7 @@ export default function DashboardLayout({
       </AnimatePresence>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b bg-background/50 px-4 backdrop-blur-2xl lg:px-8">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b bg-background/50 px-4 backdrop-blur-2xl lg:px-8 print:hidden">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
@@ -288,9 +318,10 @@ export default function DashboardLayout({
             <span className="hidden sm:inline">Search or run a command…</span>
             <ShortcutHint className="ml-auto hidden sm:inline-flex" />
           </button>
+          <NotificationBell userId={user.id} />
         </header>
 
-        <main className="flex-1 p-4 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 lg:p-8 print:p-0">{children}</main>
       </div>
     </div>
   );

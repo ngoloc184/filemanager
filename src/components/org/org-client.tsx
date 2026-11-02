@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Building2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +46,7 @@ export default function OrgClient({ user }: { user: SessionUser }) {
   const [data, setData] = useState<MyOrg | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>("overview");
+  const router = useRouter();
 
   const load = useCallback(async () => {
     try {
@@ -98,7 +100,17 @@ export default function OrgClient({ user }: { user: SessionUser }) {
     );
   }
 
-  if (!data) return <OrgCreateForm onCreated={() => void load()} />;
+  if (!data) {
+    return (
+      <OrgCreateForm
+        onCreated={() => {
+          void load();
+          // the server layout reads hasOrg: refresh it so Documents shows up
+          router.refresh();
+        }}
+      />
+    );
+  }
 
   const { org, me } = data;
   const isAdmin = hasRole(me, "org_admin") && me.status === "active";

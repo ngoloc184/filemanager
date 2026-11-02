@@ -83,6 +83,12 @@ export const STEP_STATUS_LABELS: Record<StepStatus, string> = {
   skipped: "Skipped",
 };
 
+/** Status of one approval step; an approved sign step reads 'Signed (Đã ký)'. */
+export function stepStatusLabel(kind: StepKind | string, status: StepStatus | string): string {
+  if (kind === "sign" && status === "approved") return "Signed (Đã ký)";
+  return STEP_STATUS_LABELS[status as StepStatus] ?? status;
+}
+
 export const OPINION_KIND_LABELS: Record<OpinionKind, string> = {
   instruction: "Instruction (Ý kiến chỉ đạo)",
   proposal: "Proposal (Đề xuất)",
@@ -158,4 +164,35 @@ const RELATION_LABELS: Record<string, string> = {
 /** Label of get_document().related[].relation; unknown names are shown as words. */
 export function relationLabel(relation: string): string {
   return RELATION_LABELS[relation] ?? relation.replace(/_/g, " ");
+}
+
+/**
+ * Why a document's files are locked (document_files.frozen), worded by its
+ * status: register_incoming freezes incoming files, submit_for_approval,
+ * sign and issue freeze outgoing ones.
+ */
+export function frozenFileLabel(status: DocumentStatus | string | null | undefined): string {
+  switch (status) {
+    case "registered":
+    case "submitted":
+    case "in_progress":
+    case "completed":
+    case "cancelled":
+      return "Locked after registration (vào sổ)";
+    case "in_review":
+    case "awaiting_signature":
+      return "Locked while in review (đang trình ký)";
+    case "signed":
+      return "Locked after signing (đã ký)";
+    case "issued":
+    case "recalled":
+      return "Locked after issue (phát hành)";
+    case "rejected":
+    case "withdrawn":
+      return "Locked: the workflow has ended";
+    case "archived":
+      return "Locked: the document is archived";
+    default:
+      return "Locked (đã khóa)";
+  }
 }

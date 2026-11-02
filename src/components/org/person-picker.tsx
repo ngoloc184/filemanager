@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Loader2, Search, X } from "lucide-react";
 import { listOrgMembers, searchDirectory, type DirectoryPerson } from "@/lib/services/org";
-import { memberLabel } from "@/lib/org";
+import { memberDetail, memberLabel, resultsFor, type QueryResults } from "@/lib/org";
 import { getErrorMessage } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 
@@ -65,7 +65,8 @@ export function PersonPicker(props: {
   );
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<DirectoryPerson[]>([]);
+  // tagged with their query: results of an older query are never shown or picked
+  const [results, setResults] = useState<QueryResults<DirectoryPerson> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(0);
@@ -93,13 +94,13 @@ export function PersonPicker(props: {
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setLoading(true);
+      setError(null);
       const request = includeInactive ? listOrgMembers(query, true) : searchDirectory(query);
       request
         .then((people) => {
           if (cancelled) return;
           remember(people);
-          setResults(people);
-          setError(null);
+          setResults({ query, items: people });
           setActive(0);
         })
         .catch((err: unknown) => {
@@ -116,7 +117,10 @@ export function PersonPicker(props: {
   }, [open, query, includeInactive]);
 
   const excluded = new Set(excludeIds ?? []);
-  const options = results.filter((p) => !excluded.has(p.user_id) && (!filter || filter(p)));
+  const fresh = resultsFor(results, query);
+  // the query changed and its search has not answered yet
+  const stale = fresh === null;
+  const options = (fresh ?? []).filter((p) => !excluded.has(p.user_id) && (!filter || filter(p)));
   const current = value && selected?.user_id === value ? selected : null;
   const activeIndex = Math.min(active, Math.max(options.length - 1, 0));
 
@@ -143,7 +147,11 @@ export function PersonPicker(props: {
       e.preventDefault();
       setActive(Math.max(activeIndex - 1, 0));
     } else if (e.key === "Enter") {
-      if (open && options[activeIndex]) {
+      if (open && stale) {
+        // results for what was just typed are not in yet: never pick from
+        // the previous search (and do not submit the enclosing form)
+        e.preventDefault();
+      } else if (open && options[activeIndex]) {
         e.preventDefault();
         pick(options[activeIndex]);
       }
@@ -213,9 +221,9 @@ export function PersonPicker(props: {
           </button>
         )}
       </div>
-      {current && !open && (current.department_name || current.email) && (
+      {current && !open && memberDetail(current, current.department_name) && (
         <p className="mt-1 truncate text-xs text-muted-foreground">
-          {[current.email, current.department_name].filter(Boolean).join(" · ")}
+          {memberDetail(current, current.department_name)}
         </p>
       )}
       {open && (
@@ -225,7 +233,7 @@ export function PersonPicker(props: {
           aria-label="People"
           className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
         >
-          {loading && options.length === 0 && (
+          {(loading || stale) && !error && options.length === 0 && (
             <li className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground" role="presentation">
               <Loader2 className="size-4 animate-spin" aria-hidden />
               Searching…
@@ -236,7 +244,7 @@ export function PersonPicker(props: {
               {error}
             </li>
           )}
-          {!loading && !error && options.length === 0 && (
+          {!loading && !stale && !error && options.length === 0 && (
             <li className="px-2 py-1.5 text-sm text-muted-foreground" role="presentation">
               No people found
             </li>
@@ -264,9 +272,9 @@ export function PersonPicker(props: {
                   <span className="shrink-0 text-xs text-muted-foreground">({p.status})</span>
                 )}
               </div>
-              <div className="truncate text-xs text-muted-foreground">
-                {[p.email, p.department_name].filter(Boolean).join(" · ")}
-              </div>
+              {memberDetail(p, p.department_name) && (
+                <div className="truncate text-xs text-muted-foreground">{memberDetail(p, p.department_name)}</div>
+              )}
             </li>
           ))}
         </ul>

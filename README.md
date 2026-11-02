@@ -10,6 +10,8 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 - **Text editor**: Create a `.txt` file directly in a folder, or edit small text files (each save becomes a new version)
 - **Saved links**: A private list of useful URLs with a title (e.g. “Daily progress update”)
 - **Chat**: Real-time direct and group messages; text, files, emoji, stickers with Zalo-style suggestions, replies, @mentions, reactions, pinned messages, typing and “Seen”; groups with owner/admin roles, picture and background; display names and profile pictures; Web Push notifications on the device, also with the site closed ([docs/chat.md](docs/chat.md))
+- **Company & Documents (Văn bản)**: Companies with departments, positions, roles (admin, clerk, leader, department head, staff) and invitation links; incoming documents (register in a book with arrival numbers, present to a leader, assign lead/support/info with deadlines, report, complete) and outgoing/internal documents (approval chain, e-approval sign, issue with automatic numbers like 01/QĐ-ABC, recall, reply/replace/correct); inbox views, search, reports, deadline reminders, dossiers with retention and legal hold, offboarding that hands work to a successor ([docs/organization.md](docs/organization.md), [docs/documents.md](docs/documents.md), [docs/operations.md](docs/operations.md))
+- **Notifications**: A bell with shares, comments and document events, also pushed to the device
 - **AI Agent**: Talk to your files in the chat (“Thêm file Hợp đồng.docx vào thư mục Kế toán”, “Xem thùng rác”, “Lưu link …”); asks for missing details, confirms every change, and learns new phrasings from all users — no LLM required ([docs/ai-agent.md](docs/ai-agent.md))
 - **File Management**: Download, view, and delete individual files
 - **Search**: Search through batches and files
@@ -42,7 +44,7 @@ A modern web application for managing file uploads, built with Next.js, Supabase
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Copy and run the contents of `supabase/schema.sql`
 3. Run the migrations in `supabase/migrations/` **in filename order**
-   (`202608280001...` through `202608280035...`). The 030–035 set hardens
+   (`202608280001...` through `202608280046...`). The 030–046 set hardens
    security and adds the company layer:
    - `030_security_hardening`: drops the legacy storage policies, removes
      anonymous access to internal functions and limits push endpoints to
@@ -55,7 +57,26 @@ A modern web application for managing file uploads, built with Next.js, Supabase
      item carries your role;
    - `034_organizations`: companies, departments, positions, roles and
      invitations;
-   - `035_notifications`: the notification center.
+   - `035_notifications`: the notification center;
+   - `036_documents_core`: the Documents (Văn bản) tables, access rules,
+     file freezing and numbering helpers;
+   - `037_storage_hygiene`: deleting old versions, trash auto-purge and
+     orphan cleanup; uploads that were never registered now count toward
+     the quota, and uploads must use the path the app writes;
+   - `038_offboarding`: hands a leaving member's files, groups and document
+     work to a successor;
+   - `039_document_registers` … `043_dossiers_retention`: registers (sổ) and
+     numbering, incoming and outgoing document workflows, search, reports and
+     reminders, dossiers (hồ sơ) and retention;
+   - `044_custom_stickers`: site admins and the chat sticker packs they
+     manage at `/admin/stickers` (public `stickers` bucket, PNG/WebP/GIF/JPEG
+     up to 2 MB). Appoint the first admin in the SQL Editor:
+     `insert into public.app_admins (user_id) select id from auth.users where email = '…' on conflict do nothing;`;
+   - `045_documents_access_fixes`: recalling a document also takes access
+     back from people it was sent to, and files added to a registered
+     incoming document are locked like the ones registered with it;
+   - `046_qa_fixes`: fixes from testing the live app (the Done view, report
+     counts, duplicate notifications, the result note in the history).
 
    Deleting a user who still owns files now fails. Offboard them from the
    organization first, so their files are handed over.

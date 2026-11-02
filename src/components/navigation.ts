@@ -1,9 +1,12 @@
 import {
+  Building2,
   Clock,
+  FileText,
   History,
   Link2,
   Search,
   Share2,
+  Sticker,
   Trash2,
   Upload,
   UsersRound,
@@ -22,6 +25,19 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/trash", label: "Trash", icon: Trash2 },
   { href: "/activity", label: "Activity", icon: History },
   { href: "/contacts", label: "Related users", icon: UsersRound },
+];
+
+/** Company sections: Documents needs a company, Organization creates or joins one. */
+export const COMPANY_NAV_ITEMS: readonly NavItem[] = [
+  { href: "/documents", label: "Documents", icon: FileText },
+  { href: "/org", label: "Organization", icon: Building2 },
+];
+
+export const ALL_NAV_ITEMS: readonly NavItem[] = [...NAV_ITEMS, ...COMPANY_NAV_ITEMS];
+
+/** Site admin sections; only shown to site admins, so kept out of ALL_NAV_ITEMS (the palette). */
+export const ADMIN_NAV_ITEMS: readonly NavItem[] = [
+  { href: "/admin/stickers", label: "Stickers", icon: Sticker },
 ];
 
 export function isActive(pathname: string, href: string): boolean {

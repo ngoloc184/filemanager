@@ -118,7 +118,7 @@ export function MessageRow({
                   </button>
                 )}
                 {m.file_name && <FileBubble message={m} mine={mine} onPreview={onPreview} />}
-                {sticker && <StickerImage id={sticker} alt="Sticker" className="h-28 w-28 drop-shadow-md" />}
+                {sticker && <StickerImage id={sticker} alt="Sticker" className="h-28 w-28 drop-shadow-md" unavailableLabel="Sticker unavailable" />}
                 {m.body && (
                   <p className="whitespace-pre-wrap break-words">
                     {mentionSegments(m.body, people).map((part, i) =>

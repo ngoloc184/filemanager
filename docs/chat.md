@@ -50,7 +50,8 @@ messages, the brand colour on others'), so it is clear what will be copied.
   emoji such as 😂); tapping one sends it instead of the words. The stickers
   are Microsoft Fluent Emoji (MIT license, `public/stickers/fluent/LICENSE.txt`),
   built with `node scripts/build-stickers.mjs <fluentui-emoji checkout>`;
-  Vietnamese words are in `src/lib/stickers/suggest.ts`.
+  Vietnamese words are in `src/lib/stickers/suggest.ts`. Packs that site
+  admins add come first in the picker and in the suggestions (see below).
 * **Reply**: hover a message → ↩. The quote above the reply jumps to the
   original.
 * **@mention** (groups): type `@` and pick a member; their name is
@@ -63,6 +64,52 @@ messages, the brand colour on others'), so it is clear what will be copied.
   pins are removed for everyone).
 * **Typing** (“Bob is typing…”) and **Seen** (direct: “Seen”; groups: the
   pictures of the members who read your last message).
+
+## Sticker packs (site admins)
+
+Site admins manage stickers for everyone at **Admin → Stickers**
+(`/admin/stickers`). The page and the sidebar entry exist only for them;
+anyone else gets a 404.
+
+* **Packs**: create, rename, choose a cover, move up or down, turn on or off,
+  delete. A turned-off pack disappears from every picker (pickers re-read the packs
+  when opened, at most every 5 minutes); its stickers can
+  no longer be sent, but messages that already show one keep it.
+* **Add stickers** three ways: pick or drop several images on a pack;
+  **Import ZIP** (a whole pack in one file); **From URL** (the server
+  downloads the picture). PNG, WebP, GIF (animated too) and JPEG up to 2 MB;
+  the type is read from the file's bytes, never from its name, and SVG is
+  refused.
+* **Keywords (từ khoá gợi ý)** per sticker, Vietnamese or English, with or
+  without accents: typing one of them in chat suggests the sticker, ahead of
+  the built-in ones.
+* **Built-in stickers**: switch each of the 8 Fluent groups on or off.
+* Deleting a sticker removes its picture; old messages that used it show
+  “Sticker unavailable”. Browsers that already showed it may keep their copy
+  for up to an hour.
+
+ZIP layout: images at any depth (`__MACOSX/` and hidden files are skipped),
+at most 300 images and 100 MB unpacked, plus an optional `pack.json`:
+
+```json
+{
+  "name": "Office cats",
+  "stickers": [
+    { "file": "cat-ok.png", "name": "Cat OK", "keywords": ["ok", "được", "đồng ý"] }
+  ]
+}
+```
+
+Without `pack.json` the pack takes the ZIP's name and each sticker its file
+name. Appoint a site admin in the SQL Editor (there is no UI for it):
+
+```sql
+insert into public.app_admins (user_id)
+select id from auth.users where email = 'admin@example.com'
+on conflict do nothing;
+```
+
+Removing one: `delete from public.app_admins where user_id = '…';`
 
 ## Profile
 
@@ -101,7 +148,8 @@ subscribes this device to **Web Push**.
 
 1. Run migrations `202608280025_chat.sql`, `202608280026_user_preferences.sql`,
    `202608280027_chat_groups.sql`, `202608280028_web_push.sql` and
-   `202608280029_chat_stickers.sql` in order.
+   `202608280029_chat_stickers.sql` in order (and, for admin-managed sticker
+   packs, `202608280044_custom_stickers.sql` after the 030–043 set).
 2. Web Push: run `npm run push:keys` and put the three printed lines
    (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) in
    `.env.local` and in the host's environment (Vercel → Settings →
@@ -117,7 +165,8 @@ subscribes this device to **Web Push**.
    tab comes back, the open conversation and the list are reloaded.
 4. Storage: migration 027 creates the public bucket `public-images` (5 MB,
    images only) with write policies for `users/<your id>/…` and
-   `groups/<group id>/…`.
+   `groups/<group id>/…`; migration 044 creates the public bucket `stickers`
+   (2 MB, PNG/WebP/GIF/JPEG) that only site admins can write.
 5. Optional hardening: in **Realtime → Settings**, turn off **Allow public
    access** so the typing channel (`typing:<conversation id>`) is limited to
    members by the policies in migration 027. Until then typing events of a

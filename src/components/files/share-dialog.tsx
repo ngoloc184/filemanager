@@ -39,6 +39,14 @@ import {
 } from "@/lib/services/sharing";
 import { getErrorMessage } from "@/lib/types/database";
 
+// Labels for the role selects; passed as `items` so the trigger shows the
+// label instead of the raw value.
+const ROLE_ITEMS: Record<ShareRoleInput, string> = {
+  viewer: "Viewer",
+  editor: "Editor",
+  admin: "Admin",
+};
+
 export default function ShareDialog({
   open,
   onOpenChange,
@@ -226,7 +234,7 @@ export default function ShareDialog({
                 }}
                 className="flex-1"
               />
-              <Select value={role} onValueChange={(v) => v && setRole(v as ShareRoleInput)}>
+              <Select items={ROLE_ITEMS} value={role} onValueChange={(v) => v && setRole(v as ShareRoleInput)}>
                 <SelectTrigger className="w-28">
                   <SelectValue />
                 </SelectTrigger>
@@ -258,6 +266,7 @@ export default function ShareDialog({
                   >
                     <span className="min-w-0 flex-1 text-sm truncate" title={share.grantee_email}>{share.grantee_email}</span>
                     <Select
+                      items={ROLE_ITEMS}
                       value={share.role}
                       onValueChange={(v) => v && void changeRole(share, v as ShareRoleInput)}
                     >

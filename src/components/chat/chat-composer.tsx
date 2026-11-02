@@ -52,8 +52,9 @@ export function Composer({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
-  // the sticker list loads the first time it is needed
-  const stickers = useStickers(stickerOpen || draft.trim().length > 0);
+  // the sticker list loads the first time it is needed; opening the picker
+  // also picks up packs the admins changed (when the copy is 5+ minutes old)
+  const stickers = useStickers(draft.trim().length > 0, stickerOpen);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
 
@@ -61,7 +62,7 @@ export function Composer({
   const suggestions = useMemo(() => (query ? filterMembers(members, query.query).slice(0, 6) : []), [members, query]);
   const showMentions = suggestions.length > 0;
   const stickerHints = useMemo(
-    () => (stickers && !showMentions && !emojiOpen && !stickerOpen ? suggestStickers(draft, stickers) : []),
+    () => (stickers && !showMentions && !emojiOpen && !stickerOpen ? suggestStickers(draft, stickers.stickers) : []),
     [stickers, draft, showMentions, emojiOpen, stickerOpen]
   );
 

@@ -467,15 +467,16 @@ declare
   v_n text := coalesce(p_number::text, '');
 begin
   v := replace(v, '{n}', case when v_n = '' then '' else lpad(v_n, greatest(2, char_length(v_n)), '0') end);
-  v := replace(v, '{type}', coalesce(btrim(p_type), ''));
-  v := replace(v, '{org}', coalesce(btrim(p_org), ''));
-  v := replace(v, '{dept}', coalesce(btrim(p_dept), ''));
+  v := replace(v, '{type}', coalesce(p_type, ''));
+  v := replace(v, '{org}', coalesce(p_org, ''));
+  v := replace(v, '{dept}', coalesce(p_dept, ''));
   v := replace(v, '{yyyy}', coalesce(p_year::text, ''));
+  -- same steps, same order as renderNotation in src/lib/documents/numbering.ts
   v := regexp_replace(v, '-{2,}', '-', 'g');
-  v := regexp_replace(v, '/{2,}', '/', 'g');
-  v := regexp_replace(v, '-+/', '/', 'g');
   v := regexp_replace(v, '/-+', '/', 'g');
-  v := regexp_replace(v, '^[-/[:space:]]+|[-/[:space:]]+$', '', 'g');
+  v := regexp_replace(v, '-+/', '/', 'g');
+  v := regexp_replace(v, '/{2,}', '/', 'g');
+  v := regexp_replace(v, '^[-/]+|[-/]+$', '', 'g');
   return v;
 end;
 $$;

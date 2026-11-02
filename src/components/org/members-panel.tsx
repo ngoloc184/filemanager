@@ -33,7 +33,7 @@ import {
   type DirectoryPerson,
   type Position,
 } from "@/lib/services/org";
-import { ORG_ROLES, ROLE_LABELS, memberLabel, roleLabels, type MemberStatus, type OrgRole } from "@/lib/org";
+import { ORG_ROLES, ROLE_LABELS, memberDetail, memberLabel, roleLabels, type MemberStatus, type OrgRole } from "@/lib/org";
 import { removesOwnAdmin, toggleRole } from "@/lib/org-forms";
 import { getErrorMessage } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
@@ -172,7 +172,9 @@ export function MembersPanel({
                           {memberLabel(m)}
                           {isSelf && <span className="ml-1 text-xs font-normal text-muted-foreground">(you)</span>}
                         </div>
-                        <div className="truncate text-xs text-muted-foreground">{m.email}</div>
+                        {memberDetail(m) && (
+                          <div className="truncate text-xs text-muted-foreground">{memberDetail(m)}</div>
+                        )}
                         {m.title && <div className="truncate text-xs text-muted-foreground">{m.title}</div>}
                       </div>
                     </TableCell>
@@ -339,7 +341,7 @@ function MemberDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit {memberLabel(person)}</DialogTitle>
-          <DialogDescription>{person.email}</DialogDescription>
+          {memberDetail(person) && <DialogDescription>{memberDetail(person)}</DialogDescription>}
         </DialogHeader>
         <form id="member-form" onSubmit={save} className="space-y-4" noValidate>
           <div className="space-y-2">

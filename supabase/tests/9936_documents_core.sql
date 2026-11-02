@@ -337,6 +337,21 @@ select pg_temp.check(
     'application/pdf')) is null,
   'once unfrozen the file takes a new version');
 
+-- restoring an older version would swap the content of a frozen file
+reset role;
+update public.document_files set frozen = true where file_id = :F1;
+set local role authenticated;
+select pg_temp.login(:B);
+select pg_temp.check(
+  pg_temp.error_of(format('select public.restore_file_version(%L, %L)',
+    'f1000000-0000-0000-0000-0000000000f1',
+    (select id from public.file_versions where file_id = :F1 and version_no = 1))) ~* 'locked',
+  'a frozen file cannot switch back to an older version');
+reset role;
+update public.document_files set frozen = false where file_id = :F1;
+set local role authenticated;
+select pg_temp.login(:B);
+
 -- hard delete of a non-frozen attached file removes the link
 select public.soft_delete_file(:F2);
 select public.hard_delete_file(:F2);
@@ -591,5 +606,26 @@ reset role;
 select pg_temp.check(
   (select count(*) from public.document_files where file_id = :F1) = 0,
   'its file links are gone');
+
+-- a signed document: the clerk may remove only the signed copy
+with x as (
+  insert into public.documents (org_id, direction, status, subject, created_by, submitted_at)
+  values (:ORG, 'outgoing', 'signed', 'Đã ký', :B, now())
+  returning id
+)
+insert into ids select 'd4', id from x;
+insert into public.document_files (document_id, file_id, kind)
+values ((select v from ids where k = 'd4'), :F1, 'main');
+set local role authenticated;
+select pg_temp.login(:A);
+select pg_temp.check(
+  pg_temp.error_of(format('select public.detach_document_file(%L, %L)',
+    (select v from ids where k = 'd4'), 'f1000000-0000-0000-0000-0000000000f1')) ~* 'signed copy',
+  'the clerk cannot remove the main file of a signed document');
+select pg_temp.check(
+  pg_temp.error_of(format('select public.attach_document_file(%L, %L, %L)',
+    (select v from ids where k = 'd4'), 'f1000000-0000-0000-0000-0000000000f1', 'main')) ~* 'signed copy',
+  'the clerk cannot replace the main file of a signed document');
+reset role;
 
 rollback;

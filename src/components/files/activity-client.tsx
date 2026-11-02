@@ -34,6 +34,8 @@ function actionLabel(action: string): string {
       return "uploaded a new version of";
     case "file.version_restored":
       return "restored a version of";
+    case "file.version_deleted":
+      return "deleted a version of";
     case "file.commented":
       return "commented on file";
     case "folder.commented":
@@ -159,7 +161,7 @@ export default function ActivityClient({
                   ? ` for ${metadata.grantee_email} to ${metadata.role ?? "viewer"}`
                   : event.action === "file.version_added" && metadata.version_no
                     ? ` (v${metadata.version_no})`
-                    : event.action === "file.version_restored" && metadata.version_no
+                    : (event.action === "file.version_restored" || event.action === "file.version_deleted") && metadata.version_no
                       ? ` (v${metadata.version_no})`
                       : event.action === "file.renamed" && metadata.old_name
                         ? ` from "${metadata.old_name}"`

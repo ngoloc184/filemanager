@@ -5,9 +5,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type ComponentProps,
-  type ComponentType,
-  type ReactNode,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDropzone } from "react-dropzone";
@@ -111,18 +108,6 @@ import {
 } from "@/components/files/file-dialogs";
 
 type RowTarget = { kind: "folder" | "file"; id: string; name: string };
-
-/** Extra buttons for one row of the versions list in DetailsDialog. */
-type VersionActions = (version: FileVersion, reloadVersions: () => Promise<void>) => ReactNode;
-
-/**
- * DetailsDialog with its `versionActions` slot. A component accepts props it
- * does not use, so this is a plain (widening) assignment, not a cast; it keeps
- * this file compiling whether or not file-dialogs.tsx already declares the prop.
- */
-const DetailsDialogWithVersionActions: ComponentType<
-  ComponentProps<typeof DetailsDialog> & { versionActions?: VersionActions }
-> = DetailsDialog;
 
 const TRUNCATED_LIMIT_LABEL = FOLDER_LISTING_LIMIT.toLocaleString("en-US");
 
@@ -1290,7 +1275,7 @@ export default function FilesClient({
         />
       )}
       {detailsFile && (
-        <DetailsDialogWithVersionActions
+        <DetailsDialog
           open
           onOpenChange={(open) => {
             if (!open) setDetailsFile(null);

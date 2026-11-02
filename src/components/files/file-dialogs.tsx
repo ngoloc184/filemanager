@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Download, Loader2, RotateCcw, Sparkles, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -298,6 +298,7 @@ export function DetailsDialog({
   currentUserId,
   onRefreshFile,
   onToggleVisibility,
+  versionActions,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -307,6 +308,8 @@ export function DetailsDialog({
   currentUserId: string;
   onRefreshFile: (fileId: string) => Promise<void>;
   onToggleVisibility: (file: FileRow) => Promise<void>;
+  /** extra buttons per version row (files-client adds Delete for old versions) */
+  versionActions?: (version: FileVersion, reloadVersions: () => Promise<void>) => ReactNode;
 }) {
   const [versions, setVersions] = useState<FileVersion[] | null>(null);
   const [toggling, setToggling] = useState(false);
@@ -627,6 +630,7 @@ export function DetailsDialog({
                       )}
                     </Button>
                   )}
+                  {versionActions?.(version, reloadVersions)}
                 </div>
               ))}
             </div>
@@ -642,12 +646,15 @@ export function PreviewDialog({
   onOpenChange,
   file,
   className,
+  hideAiSummary = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   file: PreviewableFile;
   /** extra classes for the dialog (e.g. a higher z-index above a floating panel) */
   className?: string;
+  /** document files: AI summaries of documents are not offered yet */
+  hideAiSummary?: boolean;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [textContent, setTextContent] = useState<string | null>(null);
@@ -712,18 +719,20 @@ export function PreviewDialog({
           <DialogDescription>
             {formatBytes(file.size)} • {mime}
           </DialogDescription>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-1 w-fit gap-1.5"
-            onClick={() => {
-              onOpenChange(false);
-              openAiSummary({ id: file.id, name: file.name, mimeType: file.mime_type });
-            }}
-          >
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            AI tóm tắt
-          </Button>
+          {!hideAiSummary && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-1 w-fit gap-1.5"
+              onClick={() => {
+                onOpenChange(false);
+                openAiSummary({ id: file.id, name: file.name, mimeType: file.mime_type });
+              }}
+            >
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              AI tóm tắt
+            </Button>
+          )}
         </DialogHeader>
         <div className="min-h-64 max-h-[72vh] flex items-center justify-center bg-muted/40 rounded-lg overflow-hidden">
           {loadError && (

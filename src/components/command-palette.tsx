@@ -18,7 +18,7 @@ import {
   Sun,
   UploadCloud,
 } from "lucide-react";
-import { NAV_ITEMS, sendFilesCommand, type FilesCommand } from "@/components/navigation";
+import { ALL_NAV_ITEMS, sendFilesCommand, type FilesCommand } from "@/components/navigation";
 
 const OPEN_EVENT = "fm:open-command-palette";
 
@@ -157,7 +157,7 @@ export function CommandPalette({ onSignOut }: { onSignOut: () => void }) {
                 </Group>
 
                 <Group heading="Go to">
-                  {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+                  {ALL_NAV_ITEMS.map(({ href, label, icon: Icon }) => (
                     <Item key={href} value={`go ${label}`} onSelect={() => run(() => router.push(href))}>
                       <Icon /> {label}
                       <ArrowRight className="!h-3 !w-3 opacity-40" />
