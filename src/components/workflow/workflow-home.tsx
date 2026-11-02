@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, CalendarPlus, Copy, FilePlus2, LayoutTemplate, Link2, Loader2, LogIn, MoreHorizontal, Network, Users, Workflow as WorkflowIcon } from "lucide-react";
+import { ArrowRight, CalendarPlus, ChevronLeft, Copy, FilePlus2, LayoutTemplate, Link2, Loader2, LogIn, MoreHorizontal, Network, Users, Workflow as WorkflowIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
@@ -34,7 +34,7 @@ export interface WorkflowSummary {
   roles: { name: string; color: RoleColor }[];
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, signedIn }: { children: React.ReactNode; signedIn: boolean }) {
   return (
     <div className="min-h-dvh bg-background">
       <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
@@ -43,7 +43,12 @@ function Shell({ children }: { children: React.ReactNode }) {
             <WorkflowIcon className="size-4" />
           </span>
           <span className="font-semibold">Workflow</span>
-          <ThemeToggle className="ml-auto" layoutId="workflow-home-theme" />
+          {signedIn && (
+            <Link href="/dashboard" className="ml-auto inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
+              <ChevronLeft className="size-4" /> File Manager
+            </Link>
+          )}
+          <ThemeToggle className={signedIn ? "" : "ml-auto"} layoutId="workflow-home-theme" />
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
@@ -79,7 +84,7 @@ export function WorkflowHome({ signedIn, workflows }: { signedIn: boolean; workf
 
   if (!signedIn) {
     return (
-      <Shell>
+      <Shell signedIn={false}>
         <section className="mx-auto max-w-xl py-10 text-center">
           <span className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary">
             <Network className="size-6" />
@@ -151,7 +156,7 @@ export function WorkflowHome({ signedIn, workflows }: { signedIn: boolean; workf
   );
 
   return (
-    <Shell>
+    <Shell signedIn>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Workflow của bạn</h1>

@@ -10,6 +10,7 @@ import {
   Trash2,
   Upload,
   UsersRound,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,6 +23,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/search", label: "Search", icon: Search },
   { href: "/shared", label: "Shared with me", icon: Share2 },
   { href: "/links", label: "Saved links", icon: Link2 },
+  { href: "/workflow", label: "Workflow", icon: Workflow },
   { href: "/trash", label: "Trash", icon: Trash2 },
   { href: "/activity", label: "Activity", icon: History },
   { href: "/contacts", label: "Related users", icon: UsersRound },

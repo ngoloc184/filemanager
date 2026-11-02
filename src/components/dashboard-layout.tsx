@@ -37,8 +37,8 @@ type Section = { title: string; items: readonly NavItem[] };
 
 function navSections(hasOrg: boolean, isAdmin: boolean): Section[] {
   return [
-    { title: "Workspace", items: NAV_ITEMS.slice(0, 5) },
-    { title: "Library", items: NAV_ITEMS.slice(5) },
+    { title: "Workspace", items: NAV_ITEMS.slice(0, 6) },
+    { title: "Library", items: NAV_ITEMS.slice(6) },
     // Organization stays visible so people can create or join a company
     { title: "Company", items: hasOrg ? COMPANY_NAV_ITEMS : COMPANY_NAV_ITEMS.slice(1) },
     ...(isAdmin ? [{ title: "Admin", items: ADMIN_NAV_ITEMS }] : []),
