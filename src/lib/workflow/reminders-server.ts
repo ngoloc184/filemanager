@@ -155,12 +155,13 @@ async function loadPlan(admin: Admin, id: string, today: string): Promise<Plan |
 
 /**
  * "Nhắc ngay": e-mails one step (whatever its state, unless done), every step that needs a
- * reminder today (no target), or each role its unconfirmed steps ({ confirm: true }). Admins only
+ * reminder today (no target), or each role its unconfirmed steps ({ confirm: true }, only the
+ * roles of one step with a stepId). Admins only
  * (the route checks).
  */
 export async function sendNow(
   workflowId: string,
-  target: { stepId: string } | { confirm: true } | null,
+  target: { stepId: string } | { confirm: true; stepId?: string } | null,
   sentBy: { id: string; name: string },
   origin: string
 ): Promise<SendResult[] | null> {
@@ -171,7 +172,8 @@ export async function sendNow(
   const directory = await loadDirectory(admin);
   if (target && "confirm" in target) {
     const results: SendResult[] = [];
-    for (const d of confirmDigests(plan.doc)) results.push(await sendConfirm(admin, plan, d.roleId, now, directory, { origin, manual: true, sentBy }));
+    const only = target.stepId ? plan.doc.steps.find((s) => s.id === target.stepId)?.picIds ?? [] : null;
+    for (const d of confirmDigests(plan.doc).filter((d) => !only || only.includes(d.roleId))) results.push(await sendConfirm(admin, plan, d.roleId, now, directory, { origin, manual: true, sentBy }));
     return results;
   }
   const stepId = target?.stepId ?? null;

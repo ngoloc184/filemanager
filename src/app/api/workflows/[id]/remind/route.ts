@@ -30,7 +30,8 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
   const body = (await request.json().catch(() => ({}))) as { stepId?: unknown; confirm?: unknown };
   const stepId = body.stepId === undefined || body.stepId === null ? null : isId(body.stepId) ? body.stepId : undefined;
   if (stepId === undefined) return fail("Dữ liệu không hợp lệ", 400);
-  const target = body.confirm === true ? { confirm: true as const } : stepId ? { stepId } : null;
+  // { confirm: true, stepId } asks only that step's roles
+  const target = body.confirm === true ? { confirm: true as const, stepId: stepId ?? undefined } : stepId ? { stepId } : null;
 
   const supabase = await createClient();
   const [{ data: isAdmin }, { data: profile }] = await Promise.all([

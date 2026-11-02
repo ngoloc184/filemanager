@@ -65,7 +65,7 @@ export function useReminders(workflowId: string, enabled: boolean) {
 
   /** "Nhắc ngay" for one step, every step due a reminder today (null), or confirmation requests. */
   const remind = useCallback(
-    async (target: { stepId: string } | { confirm: true } | null): Promise<{ results: RemindResult[] } | { error: string }> => {
+    async (target: { stepId: string } | { confirm: true; stepId?: string } | null): Promise<{ results: RemindResult[] } | { error: string }> => {
       try {
         const res = await fetch(`/api/workflows/${workflowId}/remind`, {
           method: "POST",

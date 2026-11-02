@@ -33,8 +33,15 @@ export function reportResults(results: RemindResult[]) {
   if (failed) toast.error(`${failed} bước không gửi được email. Kiểm tra cấu hình SMTP.`);
 }
 
-/** "Nhắc nhở" in the header: what today's reminders are, and sending them all now. */
-export function RemindDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export type RemindMode = "today" | "confirm";
+
+/**
+ * Admin e-mail buttons: "today" (Nhắc việc: steps starting, due or overdue) or "confirm" (Nhắc xác
+ * nhận: each role is asked to confirm the timeline of its unconfirmed steps).
+ */
+export function RemindDialog({ mode, onClose }: { mode: RemindMode | null; onClose: () => void }) {
+  const open = mode !== null;
+  const onOpenChange = (o: boolean) => !o && onClose();
   const { doc, slots, now, reminders } = useWorkflow();
   const [busy, setBusy] = useState<"today" | "confirm" | null>(null);
   if (!reminders) return null;
@@ -62,21 +69,24 @@ export function RemindDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       <DialogContent className="gap-0 p-0 sm:max-w-lg">
         <DialogHeader className="border-b px-5 pt-5 pb-4">
           <DialogTitle className="flex items-center gap-2">
-            <BellRing className="size-4 text-primary" /> Nhắc nhở qua email
+            {mode === "confirm" ? <BadgeCheck className="size-4 text-primary" /> : <BellRing className="size-4 text-primary" />}
+            {mode === "confirm" ? "Nhắc xác nhận timeline" : "Nhắc việc theo timeline"}
           </DialogTitle>
           <DialogDescription>
-            Email gửi tới địa chỉ của các vai trò PIC. Hệ thống tự gửi lúc 08:00 mỗi ngày làm việc; nút dưới đây gửi ngay.
+            {mode === "confirm"
+              ? "Mỗi vai trò nhận một email liệt kê các bước của mình chưa chốt timeline, đề nghị kiểm tra, chỉnh số ngày nếu cần và bấm Xác nhận. Hệ thống tự gửi lúc 08:00 mỗi ngày làm việc cho tới khi chốt xong; nút dưới đây gửi ngay."
+              : "Email gửi tới vai trò PIC của các bước sắp bắt đầu (ngày làm việc kế tiếp), đến hạn hôm nay hoặc trễ hạn mà chưa hoàn thành. Hệ thống tự gửi lúc 08:00 mỗi ngày làm việc; nút dưới đây gửi ngay."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid max-h-[60vh] gap-5 overflow-y-auto px-5 py-4">
+          {mode === "confirm" && (
           <section className="grid gap-2">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-medium">Xác nhận timeline</h3>
+              <h3 className="text-sm font-medium">Vai trò cần xác nhận</h3>
               <Button size="sm" variant="outline" onClick={() => send("confirm")} disabled={!!busy || !digests.some((d) => d.emails.length)}>
-                {busy === "confirm" ? <Loader2 className="animate-spin" /> : <BadgeCheck />} Nhắc xác nhận ({digests.filter((d) => d.emails.length).length} vai trò)
+                {busy === "confirm" ? <Loader2 className="animate-spin" /> : <BadgeCheck />} Gửi yêu cầu xác nhận ({digests.filter((d) => d.emails.length).length} vai trò)
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Mỗi vai trò nhận một email liệt kê các bước của mình chưa chốt timeline. Tự động gửi 08:00 mỗi ngày làm việc cho tới khi chốt xong.</p>
             {digests.length ? (
               <ul className="grid gap-1.5">
                 {digests.map((d) => (
@@ -93,10 +103,12 @@ export function RemindDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               <p className="rounded-lg border border-dashed px-3 py-3 text-center text-xs text-muted-foreground">Mọi bước đã được chốt timeline.</p>
             )}
           </section>
+          )}
 
+          {mode === "today" && (
           <section className="grid gap-2">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-medium">Nhắc việc hôm nay</h3>
+              <h3 className="text-sm font-medium">Bước cần nhắc hôm nay</h3>
               <Button size="sm" onClick={() => send("today")} disabled={!!busy || !items.some((i) => i.emails.length)}>
                 {busy === "today" ? <Loader2 className="animate-spin" /> : <BellRing />} Gửi ngay ({items.filter((i) => i.emails.length).length})
               </Button>
@@ -124,6 +136,7 @@ export function RemindDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             <p className="rounded-lg border border-dashed px-3 py-3 text-center text-xs text-muted-foreground">Hôm nay không có bước nào sắp bắt đầu, đến hạn hay trễ hạn.</p>
           )}
           </section>
+          )}
         </div>
       </DialogContent>
     </Dialog>

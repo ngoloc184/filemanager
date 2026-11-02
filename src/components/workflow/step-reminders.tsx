@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BellRing, Loader2, Mail } from "lucide-react";
+import { BadgeCheck, BellRing, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -13,17 +13,18 @@ import { logTime } from "./styles";
 /** In the step panel (signed-in members): who gets this step's e-mails, "Nhắc ngay", and what was sent. */
 export function StepReminders({ step }: { step: WorkflowStep }) {
   const { doc, reminders, openRoles } = useWorkflow();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"remind" | "confirm" | null>(null);
   if (!reminders) return null;
   const roles = step.picIds.map((id) => doc.roles.find((r) => r.id === id)).filter((r) => r !== undefined);
   const emails = [...new Set(roles.flatMap((r) => reminders.emailsFor(r.name)))];
-  const sent = reminders.sent.filter((r) => r.stepId === step.id).slice(0, 10);
+  const roleNames = new Set(roles.map((r) => r.name.trim().toLowerCase()));
+  const sent = reminders.sent.filter((r) => r.stepId === step.id || (r.kind === "confirm" && r.roleName && roleNames.has(r.roleName.trim().toLowerCase()))).slice(0, 10);
 
-  async function remind() {
+  async function remind(which: "remind" | "confirm") {
     if (!reminders) return;
-    setBusy(true);
-    const r = await reminders.remind({ stepId: step.id });
-    setBusy(false);
+    setBusy(which);
+    const r = await reminders.remind(which === "confirm" ? { confirm: true, stepId: step.id } : { stepId: step.id });
+    setBusy(null);
     if ("error" in r) return void toast.error(r.error);
     reportResults(r.results);
   }
@@ -42,10 +43,17 @@ export function StepReminders({ step }: { step: WorkflowStep }) {
           {emails.length ? <span className="break-all">{emails.join(", ")}</span> : roles.length ? "Vai trò PIC chưa có email. Thêm email để gửi được nhắc nhở." : "Bước chưa có PIC."}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={remind} disabled={busy || !emails.length || step.status === "done"}>
-            {busy ? <Loader2 className="animate-spin" /> : <BellRing />} Nhắc ngay
+          <Button size="sm" variant="outline" onClick={() => remind("remind")} disabled={!!busy || !emails.length || step.status === "done"}>
+            {busy === "remind" ? <Loader2 className="animate-spin" /> : <BellRing />} Nhắc việc
           </Button>
-          <span className="text-[11px] text-muted-foreground">{step.status === "done" ? "Bước đã hoàn thành." : "Tự động gửi lúc 08:00 ngày làm việc khi sắp bắt đầu, đến hạn hoặc trễ hạn."}</span>
+          {!step.confirmed && (
+            <Button size="sm" onClick={() => remind("confirm")} disabled={!!busy || !emails.length || step.status === "done"}>
+              {busy === "confirm" ? <Loader2 className="animate-spin" /> : <BadgeCheck />} Nhắc xác nhận
+            </Button>
+          )}
+          <span className="w-full text-[11px] text-muted-foreground">
+            {step.status === "done" ? "Bước đã hoàn thành." : "Tự động lúc 08:00 ngày làm việc: nhắc việc khi sắp bắt đầu, đến hạn hoặc trễ hạn; nhắc xác nhận khi timeline chưa chốt."}
+          </span>
         </div>
         {sent.length > 0 && (
           <ul className="grid gap-1 border-t pt-2 text-[11px] text-muted-foreground">

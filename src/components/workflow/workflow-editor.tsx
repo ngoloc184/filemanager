@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  BadgeCheck,
   BellRing,
   CalendarClock,
   Check,
@@ -46,7 +47,7 @@ import { HoursDialog } from "./hours-dialog";
 import { ROLE_STYLE, fullMoment, mark, minutesLabel } from "./styles";
 import { useWorkflowSync, type ChangeInput, type SaveStatus } from "./use-workflow-sync";
 import { useReminders } from "./use-reminders";
-import { RemindDialog } from "./remind-dialog";
+import { RemindDialog, type RemindMode } from "./remind-dialog";
 import { MembersDialog } from "./members-dialog";
 
 // React Flow measures the DOM, so the canvas renders in the browser only
@@ -85,7 +86,7 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, signedIn, viewer
   const router = useRouter();
   const sync = useWorkflowSync(id, initial, canEdit);
   const reminders = useReminders(id, canEdit);
-  const [remindOpen, setRemindOpen] = useState(false);
+  const [remindMode, setRemindMode] = useState<RemindMode | null>(null);
   const [membersOpen, setMembersOpen] = useState(false);
   const { doc, name, logs, edit, undo, redo } = sync;
   const [view, setView] = useState<View>("flow");
@@ -264,8 +265,11 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, signedIn, viewer
                 <Button variant="outline" size="sm" onClick={() => setCloneOpen(true)}>
                   <Copy /> <span className="hidden md:inline">Nhân bản</span>
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setRemindOpen(true)}>
-                  <BellRing /> <span className="hidden md:inline">Nhắc nhở</span>
+                <Button variant="outline" size="sm" onClick={() => setRemindMode("today")} title="Nhắc việc theo timeline: sắp bắt đầu, đến hạn, trễ hạn">
+                  <BellRing /> <span className="hidden md:inline">Nhắc việc</span>
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setRemindMode("confirm")} title="Gửi email yêu cầu các vai trò xác nhận timeline">
+                  <BadgeCheck /> <span className="hidden md:inline">Nhắc xác nhận</span>
                 </Button>
               </>
             ) : signedIn ? null : (
@@ -335,7 +339,7 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, signedIn, viewer
           {canEdit && confirmedCount < doc.steps.length ? (
             <button
               type="button"
-              onClick={() => setRemindOpen(true)}
+              onClick={() => setRemindMode("confirm")}
               className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 font-medium text-primary hover:bg-primary/15"
               title="Gửi email yêu cầu các vai trò xác nhận timeline"
             >
@@ -377,7 +381,7 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, signedIn, viewer
             <RolesDialog open={rolesOpen} onOpenChange={setRolesOpen} />
             <HoursDialog open={hoursOpen} onOpenChange={setHoursOpen} />
             <CloneDialog source={{ name, doc }} open={cloneOpen} onOpenChange={setCloneOpen} />
-            <RemindDialog open={remindOpen} onOpenChange={setRemindOpen} />
+            <RemindDialog mode={remindMode} onClose={() => setRemindMode(null)} />
             <MembersDialog workflowId={id} isOwner={isOwner} open={membersOpen} onOpenChange={setMembersOpen} />
           </>
         )}
