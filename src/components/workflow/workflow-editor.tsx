@@ -332,9 +332,20 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, signedIn, viewer
               {done}/{doc.steps.length} xong
             </span>
           </span>
-          <span className={cn("rounded-md px-1.5 py-0.5 font-medium", confirmedCount === doc.steps.length ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>
-            {confirmedCount}/{doc.steps.length} bước đã chốt timeline
-          </span>
+          {canEdit && confirmedCount < doc.steps.length ? (
+            <button
+              type="button"
+              onClick={() => setRemindOpen(true)}
+              className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 font-medium text-primary hover:bg-primary/15"
+              title="Gửi email yêu cầu các vai trò xác nhận timeline"
+            >
+              <BellRing className="size-3" /> {confirmedCount}/{doc.steps.length} bước đã chốt · Nhắc xác nhận
+            </button>
+          ) : (
+            <span className={cn("rounded-md px-1.5 py-0.5 font-medium", confirmedCount === doc.steps.length ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>
+              {confirmedCount}/{doc.steps.length} bước đã chốt timeline
+            </span>
+          )}
           {extra > 0 && <span className="rounded-md bg-amber-500/12 px-1.5 py-0.5 font-medium text-amber-800 dark:text-amber-300">Gia hạn +{minutesLabel(extra, doc.hours)}</span>}
           {late > 0 && <span className="rounded-md bg-rose-500/10 px-1.5 py-0.5 font-medium text-rose-700 dark:text-rose-300">{late} bước trễ hạn</span>}
 
