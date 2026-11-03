@@ -5,7 +5,7 @@ import { Popover } from "@base-ui/react/popover";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { BadgeCheck, CalendarPlus, Clock3, History, Lock, PencilLine } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { dayMark, isOverdue, updateStep } from "@/lib/workflow/model";
+import { dayMark, isOverdue, updateStep, workBetween } from "@/lib/workflow/model";
 import { useWorkflow } from "./context";
 import { DurationField } from "./duration-editor";
 import { PicPicker } from "./pic-picker";
@@ -39,6 +39,10 @@ function StepNodeView({ data, selected }: NodeProps<StepFlowNode>) {
   const extended = !!slot && slot.extraMinutes > 0;
   const faded = focusRoleId !== null && !step.picIds.includes(focusRoleId);
   const confirmed = step.confirmed;
+  // how far the stage under way is through its slot, in working time
+  const total = slot ? slot.baseMinutes + slot.extraMinutes : 0;
+  const elapsed = current && slot ? Math.min(total, workBetween(slot.start, now, doc.hours)) : 0;
+  const pct = total ? Math.round((elapsed / total) * 100) : 0;
 
   const durationText = (
     <>
@@ -57,18 +61,22 @@ function StepNodeView({ data, selected }: NodeProps<StepFlowNode>) {
   return (
     <div
       className={cn(
-        "group relative w-[288px] rounded-xl bg-card text-card-foreground shadow-sm ring-1 transition-[box-shadow,opacity] duration-200",
-        selected ? "shadow-md ring-2 ring-primary" : late ? "ring-rose-500/50" : current ? "shadow-lg shadow-sky-500/25 ring-2 ring-sky-500" : "ring-border hover:shadow-md hover:ring-foreground/15",
+        "group relative rounded-xl text-card-foreground shadow-sm transition-[box-shadow,opacity,width] duration-200",
+        current
+          ? "w-[320px] bg-sky-50 shadow-[0_14px_36px_-10px_rgba(14,165,233,0.65)] ring-[3px] ring-sky-500 dark:bg-sky-950"
+          : cn("w-[288px] bg-card ring-1", selected ? "shadow-md ring-2 ring-primary" : late ? "ring-rose-500/50" : "ring-border hover:shadow-md hover:ring-foreground/15"),
+        current && selected && "outline-2 outline-offset-4 outline-primary",
         faded && "opacity-35"
       )}
       onDoubleClick={() => openStep(step.id)}
     >
-      <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1 rounded-l-xl", lead ? ROLE_STYLE[lead.color].bar : "bg-muted-foreground/30")} />
+      {current && <span aria-hidden className="absolute -inset-2 -z-10 animate-pulse rounded-2xl bg-sky-400/35 blur-md motion-reduce:animate-none" />}
+      <span aria-hidden className={cn("absolute inset-y-0 left-0 rounded-l-xl", current ? "w-1.5 bg-sky-500" : "w-1", !current && (lead ? ROLE_STYLE[lead.color].bar : "bg-muted-foreground/30"))} />
       {current && (
-        <span className="absolute -top-2.5 right-3 inline-flex items-center gap-1 rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm">
-          <span className="relative flex size-1.5">
+        <span className="absolute -top-3.5 left-4 inline-flex items-center gap-1.5 rounded-full bg-sky-500 px-2.5 py-1 text-[11px] font-bold tracking-wide text-white uppercase shadow-md shadow-sky-500/40">
+          <span className="relative flex size-2">
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-white opacity-75 motion-reduce:animate-none" />
-            <span className="relative inline-flex size-1.5 rounded-full bg-white" />
+            <span className="relative inline-flex size-2 rounded-full bg-white" />
           </span>
           Đang diễn ra
         </span>
@@ -80,13 +88,23 @@ function StepNodeView({ data, selected }: NodeProps<StepFlowNode>) {
         <Handle key={`s${key}`} id={`s-${key}`} type="source" position={pos} style={SIDE_TOP[key]} isConnectable={canEdit} className={cn(HANDLE, "opacity-0", canEdit && "group-hover:opacity-100")} />
       ))}
 
-      <div className="grid gap-2.5 pt-3 pr-3 pb-2 pl-4">
+      <div className={cn("grid gap-2.5 pr-3 pb-2", current ? "pt-4 pl-5" : "pt-3 pl-4")}>
         <div className="flex items-start gap-2">
-          <span className="mt-px grid size-6 shrink-0 place-items-center rounded-md bg-foreground/[0.06] text-[11px] font-semibold tabular-nums text-muted-foreground">{data.index + 1}</span>
+          <span
+            className={cn(
+              "mt-px grid size-6 shrink-0 place-items-center rounded-md text-[11px] font-semibold tabular-nums",
+              current ? "bg-sky-500 text-white" : "bg-foreground/[0.06] text-muted-foreground"
+            )}
+          >
+            {data.index + 1}
+          </span>
           <button
             type="button"
             onClick={() => openStep(step.id)}
-            className="nodrag min-w-0 flex-1 text-left text-[13px] leading-snug font-medium outline-none hover:text-primary focus-visible:underline"
+            className={cn(
+              "nodrag min-w-0 flex-1 text-left leading-snug outline-none hover:text-primary focus-visible:underline",
+              current ? "text-[14px] font-semibold text-sky-950 dark:text-sky-50" : "text-[13px] font-medium"
+            )}
             title={step.title || "Bước chưa đặt tên"}
           >
             <span className={cn("line-clamp-2", !step.title && "text-muted-foreground italic", step.status === "done" && "text-muted-foreground")}>{step.title || "Bước chưa đặt tên"}</span>
@@ -98,7 +116,7 @@ function StepNodeView({ data, selected }: NodeProps<StepFlowNode>) {
 
         <PicPicker step={step} />
 
-        <div className={cn("grid gap-1 rounded-lg px-2 py-1.5 text-xs", late ? "bg-rose-500/8" : "bg-muted/60", !confirmed && !late && "outline-1 outline-dashed outline-primary/35")}>
+        <div className={cn("grid gap-1 rounded-lg px-2 py-1.5 text-xs", late ? "bg-rose-500/8" : current ? "bg-white/80 ring-1 ring-sky-500/30 dark:bg-sky-900/40" : "bg-muted/60", !confirmed && !late && "outline-1 outline-dashed outline-primary/35")}>
           <div className="flex items-center gap-1.5">
             {canEdit ? (
               <Popover.Root>
@@ -133,6 +151,17 @@ function StepNodeView({ data, selected }: NodeProps<StepFlowNode>) {
             <p className="truncate tabular-nums text-muted-foreground">
               {shortMoment(slot.start)} → <span className={cn("font-medium", late ? "text-rose-700 dark:text-rose-300" : "text-foreground")}>{shortMoment(slot.end)}</span>
             </p>
+          )}
+          {current && slot && (
+            <div className="mt-0.5 grid gap-1">
+              <span className="h-2 overflow-hidden rounded-full bg-sky-500/15" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Thời gian đã trôi qua">
+                <span className="block h-full rounded-full bg-sky-500 transition-[width]" style={{ width: `${Math.max(pct, 3)}%` }} />
+              </span>
+              <span className="flex justify-between text-[11px] font-semibold text-sky-700 tabular-nums dark:text-sky-300">
+                <span>Đã qua {pct}%</span>
+                <span>Còn {minutesLabel(Math.max(0, total - elapsed), doc.hours)}</span>
+              </span>
+            </div>
           )}
         </div>
 

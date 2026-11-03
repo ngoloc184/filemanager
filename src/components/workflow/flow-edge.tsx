@@ -19,7 +19,7 @@ export function FlowEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePos
         interactionWidth={18}
         style={{
           stroke: selected ? "var(--primary)" : data?.late ? "var(--color-rose-500)" : data?.active ? "var(--color-sky-500)" : "color-mix(in oklch, var(--muted-foreground) 55%, transparent)",
-          strokeWidth: selected || data?.active ? 2.25 : 1.75,
+          strokeWidth: data?.active ? 3 : selected ? 2.25 : 1.75,
         }}
       />
       {selected && (
