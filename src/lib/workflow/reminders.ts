@@ -2,8 +2,11 @@
 // the server side that loads plans and sends mail is src/lib/workflow/reminders-server.ts.
 import { dayMark, minutesPerDay, normalizeStart, workBetween, type Slot, type WorkHours, type WorkflowDoc, type WorkflowStep } from "./model.ts";
 
-/** upcoming: starts on the next working day · due: ends today · overdue · progress: running (sent by hand) */
-export type ReminderKind = "upcoming" | "due" | "overdue" | "progress";
+/**
+ * upcoming: starts on the next working day · start: starts today (or this hour) · due: ends today
+ * (or within the hour) · overdue · progress: running (sent by hand)
+ */
+export type ReminderKind = "upcoming" | "start" | "due" | "overdue" | "progress";
 
 /** Steps whose timeline is not confirmed yet, grouped by PIC role (done steps need nothing). */
 export function confirmDigests(doc: WorkflowDoc): { roleId: string; roleName: string; stepIds: string[] }[] {
@@ -14,6 +17,7 @@ export function confirmDigests(doc: WorkflowDoc): { roleId: string; roleName: st
 }
 
 const DAY = 1440;
+const HOUR = 60;
 
 /** The plan's wall-clock time now in a time zone (the plans are written in local time). */
 export function wallNow(timeZone: string, date = new Date()): number {
@@ -30,12 +34,21 @@ export function isWorkday(day: number, hours: WorkHours): boolean {
   return !(hours.skipWeekends && (w === 0 || w === 6));
 }
 
-/** The reminder a step needs now, if any (done steps never get one). */
+/** Inside the plan's working hours (not before, after, at lunch or on a day off). */
+export function isWorkingTime(t: number, hours: WorkHours): boolean {
+  return normalizeStart(t, hours) === t;
+}
+
+/**
+ * The reminder a step needs today, for the "Nhắc việc" list and "Nhắc ngay" (done steps never get
+ * one). By hand (`manual`) every unfinished step gets one: upcoming before its start, else progress.
+ */
 export function reminderKind(step: WorkflowStep, slot: Slot | undefined, now: number, hours: WorkHours, manual = false): ReminderKind | null {
   if (!slot || step.status === "done") return null;
   const today = Math.floor(now / DAY);
   if (slot.end < now) return "overdue";
   if (Math.floor(slot.end / DAY) === today) return "due";
+  if (Math.floor(slot.start / DAY) === today) return "start";
   // the next working day: tomorrow, or Monday when today is Friday
   const nextWorkday = Math.floor(normalizeStart((today + 1) * DAY, hours) / DAY);
   const startDay = Math.floor(slot.start / DAY);
@@ -44,12 +57,37 @@ export function reminderKind(step: WorkflowStep, slot: Slot | undefined, now: nu
   return slot.start > now ? "upcoming" : "progress";
 }
 
-/** The automatic reminders of a plan for today: none on days off. */
-export function dueReminders(doc: WorkflowDoc, slots: Map<string, Slot>, now: number): { stepId: string; kind: ReminderKind }[] {
-  if (!isWorkday(Math.floor(now / DAY), doc.hours)) return [];
+/**
+ * The automatic reminder of a step at `now` (the job runs every hour), with the plan day it is
+ * recorded under so each one goes out once:
+ * - a step in days: on the day it starts, and on its due day when it lasts more than one day;
+ * - a step in hours: in the hour it starts, and in its last hour before the deadline;
+ * - overdue and not done: once a working day.
+ */
+export function autoReminder(step: WorkflowStep, slot: Slot | undefined, now: number, hours: WorkHours): { kind: ReminderKind; day: number } | null {
+  if (!slot || step.status === "done") return null;
+  const today = Math.floor(now / DAY);
+  if (slot.end < now) return { kind: "overdue", day: today };
+  if (slot.start > now) return null;
+  const startDay = Math.floor(slot.start / DAY);
+  const endDay = Math.floor(slot.end / DAY);
+  if (step.duration.unit === "h") {
+    if (workBetween(slot.start, now, hours) < HOUR) return { kind: "start", day: startDay };
+    if (workBetween(now, slot.end, hours) <= HOUR) return { kind: "due", day: endDay };
+    return null;
+  }
+  if (startDay === today) return { kind: "start", day: startDay };
+  const longerThanADay = slot.baseMinutes + slot.extraMinutes > minutesPerDay(hours);
+  if (endDay === today && longerThanADay) return { kind: "due", day: endDay };
+  return null;
+}
+
+/** The automatic reminders of a plan at `now`: none outside its working hours. */
+export function dueReminders(doc: WorkflowDoc, slots: Map<string, Slot>, now: number): { stepId: string; kind: ReminderKind; day: number }[] {
+  if (!isWorkingTime(now, doc.hours)) return [];
   return doc.steps.flatMap((s) => {
-    const kind = reminderKind(s, slots.get(s.id), now, doc.hours);
-    return kind ? [{ stepId: s.id, kind }] : [];
+    const r = autoReminder(s, slots.get(s.id), now, doc.hours);
+    return r ? [{ stepId: s.id, ...r }] : [];
   });
 }
 
@@ -110,22 +148,29 @@ export function buildReminderEmail(input: ReminderEmailInput): { subject: string
   const length = `${step.duration.amount} ${step.duration.unit === "d" ? "ngày" : "giờ"}` + (slot.extraMinutes > 0 ? ` + gia hạn ${minutesText(slot.extraMinutes, doc.hours)}` : "");
   // how late, in working time
   const late = kind === "overdue" ? minutesText(workBetween(slot.end, now, doc.hours), doc.hours) : "";
+  const endsToday = Math.floor(slot.end / DAY) === Math.floor(now / DAY);
 
   const lead: Record<ReminderKind, string> = {
     upcoming: `Hệ thống Workflow trân trọng thông báo: công việc dưới đây do nhóm ${team} phụ trách sẽ bắt đầu vào ${longMoment(slot.start)}, với thời gian thực hiện dự kiến là ${length}.`,
-    due: `Hệ thống Workflow trân trọng nhắc: công việc dưới đây do nhóm ${team} phụ trách sẽ đến hạn hoàn thành vào ${longMoment(slot.end)} hôm nay và hiện chưa được đánh dấu hoàn thành.`,
+    start:
+      slot.start > now
+        ? `Hệ thống Workflow trân trọng thông báo: công việc dưới đây do nhóm ${team} phụ trách sẽ bắt đầu vào ${longMoment(slot.start)} hôm nay, với thời gian thực hiện dự kiến là ${length} và hạn hoàn thành là ${longMoment(slot.end)}.`
+        : `Hệ thống Workflow trân trọng thông báo: đã đến thời gian bắt đầu công việc dưới đây do nhóm ${team} phụ trách (từ ${longMoment(slot.start)}), với thời gian thực hiện dự kiến là ${length} và hạn hoàn thành là ${longMoment(slot.end)}.`,
+    due: `Hệ thống Workflow trân trọng nhắc: công việc dưới đây do nhóm ${team} phụ trách sẽ đến hạn hoàn thành vào ${longMoment(slot.end)}${endsToday ? " hôm nay" : ""} và hiện chưa được đánh dấu hoàn thành.`,
     overdue: `Hệ thống Workflow trân trọng thông báo: công việc dưới đây do nhóm ${team} phụ trách đã quá hạn hoàn thành (${longMoment(slot.end)}) và hiện chưa được đánh dấu hoàn thành.`,
     progress: `Hệ thống Workflow trân trọng nhắc: công việc dưới đây do nhóm ${team} phụ trách đang trong thời gian thực hiện, với hạn hoàn thành là ${longMoment(slot.end)}.`,
   };
   const ask: Record<ReminderKind, string> = {
     upcoming: "Kính mong Quý Anh/Chị sắp xếp thời gian để bắt đầu đúng kế hoạch.",
+    start: "Kính mong Quý Anh/Chị bắt đầu thực hiện đúng kế hoạch và cập nhật trạng thái trên trang workflow. Nếu cần thêm thời gian, Quý Anh/Chị vui lòng gia hạn trên trang và nêu rõ lý do.",
     due: "Nếu công việc đã hoàn thành, kính đề nghị Quý Anh/Chị cập nhật trạng thái trên trang workflow. Nếu cần thêm thời gian, Quý Anh/Chị vui lòng gia hạn trực tiếp trên trang và nêu rõ lý do.",
     overdue: "Kính đề nghị Quý Anh/Chị khẩn trương hoàn tất và cập nhật trạng thái, hoặc gia hạn trên trang workflow kèm lý do, để các bước tiếp theo được điều chỉnh kịp thời.",
     progress: "Kính mong Quý Anh/Chị theo dõi để hoàn thành đúng hạn. Nếu cần thêm thời gian, Quý Anh/Chị vui lòng gia hạn trên trang workflow và nêu rõ lý do.",
   };
   const label: Record<ReminderKind, string> = {
     upcoming: "Sắp bắt đầu",
-    due: "Đến hạn hôm nay",
+    start: "Bắt đầu công việc",
+    due: endsToday ? "Sắp đến hạn hôm nay" : "Sắp đến hạn",
     overdue: late ? `Trễ hạn ${late}` : "Trễ hạn",
     progress: "Đang thực hiện",
   };
@@ -162,7 +207,7 @@ export function buildReminderEmail(input: ReminderEmailInput): { subject: string
     `— ${footer}`,
   ].join("\n");
 
-  const accent = kind === "overdue" ? "#e11d48" : kind === "due" ? "#d97706" : "#6d28d9";
+  const accent = kind === "overdue" ? "#e11d48" : kind === "due" ? "#d97706" : kind === "start" ? "#0284c7" : "#6d28d9";
   const html = `<!doctype html><html lang="vi"><body style="margin:0;background:#f4f4f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1f2937">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">

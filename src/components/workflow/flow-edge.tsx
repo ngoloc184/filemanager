@@ -3,7 +3,8 @@
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type Edge, type EdgeProps } from "@xyflow/react";
 import { X } from "lucide-react";
 
-export type FlowEdgeData = { onDelete: (id: string) => void; late: boolean };
+/** late: the step before is overdue · active: leads into a step under way (drawn animated) */
+export type FlowEdgeData = { onDelete: (id: string) => void; late: boolean; active: boolean };
 export type FlowEdge = Edge<FlowEdgeData, "flow">;
 
 /** A rounded elbow arrow; a selected arrow shows a remove button at its middle. */
@@ -17,8 +18,8 @@ export function FlowEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePos
         markerEnd={markerEnd}
         interactionWidth={18}
         style={{
-          stroke: selected ? "var(--primary)" : data?.late ? "var(--color-rose-500)" : "color-mix(in oklch, var(--muted-foreground) 55%, transparent)",
-          strokeWidth: selected ? 2.25 : 1.75,
+          stroke: selected ? "var(--primary)" : data?.late ? "var(--color-rose-500)" : data?.active ? "var(--color-sky-500)" : "color-mix(in oklch, var(--muted-foreground) 55%, transparent)",
+          strokeWidth: selected || data?.active ? 2.25 : 1.75,
         }}
       />
       {selected && (

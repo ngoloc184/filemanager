@@ -26,11 +26,12 @@ const SIDES = [
 const SIDE_TOP: Record<string, { top: number } | undefined> = { l: { top: 26 }, r: { top: 26 } };
 
 function StepNodeView({ data, selected }: NodeProps<StepFlowNode>) {
-  const { doc, slots, logs, now, canEdit, focusRoleId, edit, openStep, openChange } = useWorkflow();
+  const { doc, slots, logs, now, canEdit, currentIds, focusRoleId, edit, openStep, openChange } = useWorkflow();
   const step = doc.steps.find((s) => s.id === data.stepId);
   if (!step) return null;
   const slot = slots.get(step.id);
   const late = isOverdue(step, slot, now);
+  const current = currentIds.has(step.id);
   const status = STATUS_META[step.status];
   const StatusIcon = status.icon;
   const lead = doc.roles.find((r) => r.id === step.picIds[0]);
@@ -57,12 +58,21 @@ function StepNodeView({ data, selected }: NodeProps<StepFlowNode>) {
     <div
       className={cn(
         "group relative w-[288px] rounded-xl bg-card text-card-foreground shadow-sm ring-1 transition-[box-shadow,opacity] duration-200",
-        selected ? "shadow-md ring-2 ring-primary" : late ? "ring-rose-500/50" : "ring-border hover:shadow-md hover:ring-foreground/15",
+        selected ? "shadow-md ring-2 ring-primary" : late ? "ring-rose-500/50" : current ? "shadow-lg shadow-sky-500/25 ring-2 ring-sky-500" : "ring-border hover:shadow-md hover:ring-foreground/15",
         faded && "opacity-35"
       )}
       onDoubleClick={() => openStep(step.id)}
     >
       <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1 rounded-l-xl", lead ? ROLE_STYLE[lead.color].bar : "bg-muted-foreground/30")} />
+      {current && (
+        <span className="absolute -top-2.5 right-3 inline-flex items-center gap-1 rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm">
+          <span className="relative flex size-1.5">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-white opacity-75 motion-reduce:animate-none" />
+            <span className="relative inline-flex size-1.5 rounded-full bg-white" />
+          </span>
+          Đang diễn ra
+        </span>
+      )}
       {SIDES.map(([pos, key]) => (
         <Handle key={`t${key}`} id={`t-${key}`} type="target" position={pos} style={SIDE_TOP[key]} isConnectable={canEdit} className={cn(HANDLE, "opacity-0", canEdit && "group-hover:opacity-100")} />
       ))}

@@ -311,6 +311,18 @@ export function isOverdue(step: WorkflowStep, slot: Slot | undefined, now: numbe
   return !!slot && step.status !== "done" && slot.end < now;
 }
 
+/** The stage under way: not done, and marked "doing" or inside its slot now (late steps are not). */
+export function isCurrent(step: WorkflowStep, slot: Slot | undefined, now: number): boolean {
+  if (!slot || step.status === "done" || slot.end < now) return false;
+  return step.status === "doing" || slot.start <= now;
+}
+
+/** Ids of the steps under way, in plan order. */
+export function currentStepIds(doc: Pick<WorkflowDoc, "steps" | "edges">, slots: Map<string, Slot>, now: number): string[] {
+  const byId = new Map(doc.steps.map((s) => [s.id, s]));
+  return topoOrder(doc.steps, doc.edges).filter((id) => isCurrent(byId.get(id)!, slots.get(id), now));
+}
+
 // ---------------------------------------------------------------- the graph
 
 /** True when an arrow source → target would close a loop (or points at itself). */

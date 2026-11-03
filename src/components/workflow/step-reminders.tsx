@@ -52,7 +52,11 @@ export function StepReminders({ step }: { step: WorkflowStep }) {
             </Button>
           )}
           <span className="w-full text-[11px] text-muted-foreground">
-            {step.status === "done" ? "Bước đã hoàn thành." : "Tự động lúc 08:00 ngày làm việc: nhắc việc khi sắp bắt đầu, đến hạn hoặc trễ hạn; nhắc xác nhận khi timeline chưa chốt."}
+            {step.status === "done"
+              ? "Bước đã hoàn thành."
+              : step.duration.unit === "h"
+                ? "Tự động (kiểm tra mỗi giờ làm việc): nhắc lúc bắt đầu, trong giờ cuối trước hạn và mỗi ngày khi trễ hạn; nhắc xác nhận khi timeline chưa chốt."
+                : "Tự động trong giờ làm việc: nhắc vào ngày bắt đầu, ngày đến hạn (nếu dài hơn 1 ngày) và mỗi ngày khi trễ hạn; nhắc xác nhận khi timeline chưa chốt."}
           </span>
         </div>
         {sent.length > 0 && (

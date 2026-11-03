@@ -17,6 +17,8 @@ export interface WorkflowContextValue {
   canEdit: boolean;
   /** signed in: logged changes go under the account's name (no name field) */
   signedIn: boolean;
+  /** the steps under way now (isCurrent), highlighted on the diagram and the timeline */
+  currentIds: Set<string>;
   /** steps of other roles are dimmed */
   focusRoleId: string | null;
   edit: (fn: (doc: WorkflowDoc) => WorkflowDoc, key?: string | null) => void;

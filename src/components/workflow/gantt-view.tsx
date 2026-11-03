@@ -13,7 +13,7 @@ const DAY = 1440;
 
 /** Timeline: one row per step in plan order, bars from start to end; extensions are striped. */
 export function GanttView() {
-  const { doc, slots, now, canEdit, focusRoleId, edit, openStep } = useWorkflow();
+  const { doc, slots, now, canEdit, currentIds, focusRoleId, edit, openStep } = useWorkflow();
   const [zoom, setZoom] = useState(1);
   const col = ZOOMS[zoom];
   const drag = useRef<{ id: string; x0: number; moved: boolean } | null>(null);
@@ -176,20 +176,25 @@ export function GanttView() {
               const slot = slots.get(step.id);
               const roles = step.picIds.map((id) => doc.roles.find((r) => r.id === id)).filter((r) => r !== undefined);
               const late = isOverdue(step, slot, now);
+              const current = currentIds.has(step.id);
               const StatusIcon = STATUS_META[step.status].icon;
               const faded = focusRoleId !== null && !step.picIds.includes(focusRoleId);
               const x1 = slot ? x(slot.start) : 0;
               const xBase = slot ? x(slot.baseEnd) : 0;
               const x2 = slot ? x(slot.end) : 0;
               return (
-                <div key={step.id} className={cn("group/row relative flex border-b border-border/60 hover:bg-muted/30", faded && "opacity-35")} style={{ height: ROW_H }}>
+                <div key={step.id} className={cn("group/row relative flex border-b border-border/60 hover:bg-muted/30", current && "bg-sky-500/6", faded && "opacity-35")} style={{ height: ROW_H }}>
                   <button
                     type="button"
                     onClick={() => openStep(step.id)}
-                    className="sticky left-0 z-10 flex shrink-0 items-center gap-2 border-r bg-background px-2.5 text-left outline-none group-hover/row:bg-muted/30 focus-visible:bg-muted sm:gap-2.5 sm:px-4"
+                    className={cn(
+                      "sticky left-0 z-10 flex shrink-0 items-center gap-2 border-r bg-background px-2.5 text-left outline-none group-hover/row:bg-muted/30 focus-visible:bg-muted sm:gap-2.5 sm:px-4",
+                      current && "shadow-[inset_3px_0_0_var(--color-sky-500)]"
+                    )}
                     style={{ width: "var(--left)" }}
+                    title={current ? "Đang diễn ra" : undefined}
                   >
-                    <span className="w-5 shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{n}</span>
+                    <span className={cn("w-5 shrink-0 text-xs font-semibold tabular-nums", current ? "text-sky-600 dark:text-sky-400" : "text-muted-foreground")}>{n}</span>
                     <span className="min-w-0 flex-1">
                       <span className={cn("block truncate text-[13px] font-medium", !step.title && "text-muted-foreground italic")}>{step.title || "Bước chưa đặt tên"}</span>
                       <span className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-muted-foreground">
@@ -218,6 +223,7 @@ export function GanttView() {
                           "absolute top-1/2 flex h-8 -translate-y-1/2 cursor-pointer items-stretch overflow-hidden rounded-lg text-[11px] font-medium text-white shadow-sm outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/60",
                           step.status === "done" && "opacity-55",
                           late && "ring-2 ring-rose-500 ring-offset-1 ring-offset-background",
+                          current && "shadow-md shadow-sky-500/30 ring-2 ring-sky-500 ring-offset-1 ring-offset-background",
                           dragging === step.id && "shadow-lg"
                         )}
                         style={{ left: x1, width: Math.max(x2 - x1, 6) }}

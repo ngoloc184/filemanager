@@ -1,38 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, CalendarPlus, ChevronLeft, Copy, FilePlus2, LayoutTemplate, Link2, Loader2, LogIn, MoreHorizontal, Network, Users, Workflow as WorkflowIcon } from "lucide-react";
+import { ArrowRight, CalendarPlus, ChevronLeft, Copy, FilePlus2, LayoutTemplate, Link2, Loader2, LogIn, MoreHorizontal, Network, Search, Users, Workflow as WorkflowIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { blankDoc, todayDay, type RoleColor, type WorkHours, type WorkflowDoc } from "@/lib/workflow/model";
+import { blankDoc, todayDay, type WorkflowDoc } from "@/lib/workflow/model";
 import { EXAMPLE_NAME, exampleDoc } from "@/lib/workflow/template";
 import { readPayload, type Payload } from "@/lib/workflow/payload";
+import type { WorkflowSummary } from "@/lib/workflow/summary";
 import { CloneDialog } from "./clone-dialog";
+import { CurrentStage } from "./current-stage";
 import { RoleChip } from "./pic-picker";
 import { fullMoment, logTime, minutesLabel } from "./styles";
 
-export interface WorkflowSummary {
-  id: string;
-  name: string;
-  isOwner: boolean;
-  updatedAt: string;
-  clonedFrom: string | null;
-  steps: number;
-  done: number;
-  late: number;
-  extensions: number;
-  extraMinutes: number;
-  hours: WorkHours;
-  start: number | null;
-  end: number | null;
-  roles: { name: string; color: RoleColor }[];
-}
+const TAB_KEY = "workflow-home:tab";
+type Tab = "mine" | "all";
 
 function Shell({ children, signedIn }: { children: React.ReactNode; signedIn: boolean }) {
   return (
@@ -77,10 +65,27 @@ function OpenLink() {
   );
 }
 
-export function WorkflowHome({ signedIn, workflows }: { signedIn: boolean; workflows: WorkflowSummary[] }) {
+export function WorkflowHome({ signedIn, mine, all }: { signedIn: boolean; mine: WorkflowSummary[]; all: WorkflowSummary[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [cloneSource, setCloneSource] = useState<{ name: string; doc: WorkflowDoc } | null>(null);
+  const [tab, setTab] = useState<Tab>("mine");
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(TAB_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage exists only after hydration
+      if (saved === "all" || saved === "mine") setTab(saved);
+      else if (!mine.length && all.length) setTab("all");
+    } catch {}
+  }, [mine.length, all.length]);
+  const changeTab = (t: Tab) => {
+    setTab(t);
+    try {
+      localStorage.setItem(TAB_KEY, t);
+    } catch {}
+  };
 
   if (!signedIn) {
     return (
@@ -155,17 +160,55 @@ export function WorkflowHome({ signedIn, workflows }: { signedIn: boolean; workf
     </>
   );
 
+  const q = query.trim().toLowerCase();
+  const workflows = (tab === "mine" ? mine : all).filter((w) => !q || w.name.toLowerCase().includes(q));
+
   return (
     <Shell signedIn>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Workflow của bạn</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Quy trình bạn đã tạo hoặc đã mở bằng link.</p>
+          <h1 className="text-xl font-semibold tracking-tight">{tab === "mine" ? "Workflow của bạn" : "Tất cả workflow"}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{tab === "mine" ? "Quy trình bạn đã tạo hoặc đã mở bằng link." : "Mọi quy trình đang có trong hệ thống. Bấm vào một quy trình để xem chi tiết."}</p>
         </div>
         <div className="flex flex-wrap gap-2">{createButtons}</div>
       </div>
 
-      {workflows.length === 0 ? (
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <div role="tablist" aria-label="Danh sách workflow" className="flex rounded-lg bg-muted p-0.5">
+          {(
+            [
+              ["mine", "Của bạn", mine.length],
+              ["all", "Tất cả", all.length],
+            ] as const
+          ).map(([t, label, count]) => (
+            <button
+              key={t}
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => changeTab(t)}
+              className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
+            >
+              {label} <span className="tabular-nums opacity-70">{count}</span>
+            </button>
+          ))}
+        </div>
+        <label className="relative ml-auto w-full sm:w-64">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Tìm theo tên workflow"
+            aria-label="Tìm workflow"
+            className="h-8 w-full rounded-lg border border-input bg-background pr-3 pl-8 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          />
+        </label>
+      </div>
+
+      {workflows.length === 0 && q ? (
+        <p className="mt-6 rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">Không có workflow nào khớp “{query.trim()}”.</p>
+      ) : workflows.length === 0 && tab === "all" ? (
+        <p className="mt-6 rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">Hệ thống chưa có workflow nào.</p>
+      ) : workflows.length === 0 ? (
         <div className="mt-8 rounded-2xl border border-dashed p-10 text-center">
           <Network className="mx-auto size-8 text-muted-foreground" />
           <h2 className="mt-3 font-medium">Chưa có workflow nào</h2>
@@ -173,7 +216,7 @@ export function WorkflowHome({ signedIn, workflows }: { signedIn: boolean; workf
           <div className="mt-4 flex justify-center gap-2">{createButtons}</div>
         </div>
       ) : (
-        <ul className="mt-6 grid gap-3">
+        <ul className="mt-4 grid gap-3">
           {workflows.map((w) => {
             const pct = w.steps ? Math.round((w.done / w.steps) * 100) : 0;
             return (
@@ -183,7 +226,8 @@ export function WorkflowHome({ signedIn, workflows }: { signedIn: boolean; workf
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="truncate font-semibold group-hover:text-primary">{w.name}</h2>
-                      {!w.isOwner && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Được chia sẻ</span>}
+                      {w.role && w.role !== "owner" && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Được chia sẻ</span>}
+                      {w.role === "owner" && tab === "all" && <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">Của bạn</span>}
                       {w.late > 0 && <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-700 dark:text-rose-300">{w.late} bước trễ</span>}
                       {w.extensions > 0 && (
                         <span className="rounded bg-amber-500/12 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
@@ -192,6 +236,7 @@ export function WorkflowHome({ signedIn, workflows }: { signedIn: boolean; workf
                       )}
                     </div>
                     {w.clonedFrom && <p className="mt-0.5 truncate text-xs text-muted-foreground">Nhân bản từ “{w.clonedFrom}”</p>}
+                    <CurrentStage current={w.current} className="mt-1.5" />
                     <div className="mt-2 flex flex-wrap gap-1">
                       {w.roles.slice(0, 5).map((r, i) => (
                         <RoleChip key={i} name={r.name} color={r.color} />

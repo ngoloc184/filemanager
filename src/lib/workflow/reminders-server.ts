@@ -1,10 +1,10 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseDoc, parseLog, schedule, type StepLog, type WorkflowDoc } from "./model";
-import { buildConfirmEmail, buildReminderEmail, confirmDigests, dueReminders, isWorkday, recipientsFor, reminderKind, roleKey, wallNow, type ReminderKind } from "./reminders";
+import { buildConfirmEmail, buildReminderEmail, confirmDigests, dueReminders, isWorkingTime, recipientsFor, reminderKind, roleKey, wallNow, type ReminderKind } from "./reminders";
 import { sendMail } from "./mailer";
 
-/** Plans are written in this zone's local time; the daily run and "now" use it too. */
+/** Plans are written in this zone's local time; the hourly run and "now" use it too. */
 export const PLAN_TIME_ZONE = process.env.WORKFLOW_TIME_ZONE || "Asia/Ho_Chi_Minh";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -56,7 +56,9 @@ interface Plan {
   logs: StepLog[];
 }
 
-/** Sends one step's reminder to its PIC roles and records it. */
+const isoDay = (minutes: number) => new Date(Math.floor(minutes / 1440) * 86_400_000).toISOString().slice(0, 10);
+
+/** Sends one step's reminder to its PIC roles and records it under `day` (minutes; default today). */
 async function sendOne(
   admin: Admin,
   plan: Plan,
@@ -64,7 +66,7 @@ async function sendOne(
   kind: ReminderKind,
   now: number,
   directory: Map<string, string[]>,
-  opts: { origin: string; manual: boolean; sentBy?: { id: string; name: string } }
+  opts: { origin: string; manual: boolean; sentBy?: { id: string; name: string }; day?: number }
 ): Promise<SendResult> {
   const step = plan.doc.steps.find((s) => s.id === stepId);
   const slot = schedule(plan.doc, plan.logs).get(stepId);
@@ -72,7 +74,7 @@ async function sendOne(
   const to = recipientsFor(step, plan.doc, directory);
   if (!to.length) return { stepId, kind, sent: 0, skipped: "no-recipients" };
 
-  const day = new Date(Math.floor(now / 1440) * 86_400_000).toISOString().slice(0, 10);
+  const day = isoDay((opts.day ?? Math.floor(now / 1440)) * 1440);
   // automatic reminders: claim the (step, kind, day) slot first, so a retried run sends nothing twice
   let claimed: string | null = null;
   if (!opts.manual) {
@@ -116,7 +118,7 @@ async function sendConfirm(
   const to = directory.get(roleKey(role.name)) ?? [];
   if (!to.length) return { ...base, sent: 0, skipped: "no-recipients" };
 
-  const day = new Date(Math.floor(now / 1440) * 86_400_000).toISOString().slice(0, 10);
+  const day = isoDay(now);
   let claimed: string | null = null;
   if (!opts.manual) {
     const { data, error } = await admin
@@ -193,10 +195,11 @@ export async function sendNow(
 }
 
 /**
- * The daily run: every plan's reminders for today and a confirmation request per role with
- * unconfirmed steps, each at most once per step (or role), kind and day.
+ * The hourly run, inside each plan's working hours: the reminders due now (see autoReminder) and,
+ * once a working day, a confirmation request per role with unconfirmed steps; each at most once per
+ * step (or role), kind and day, so a run repeated within the hour sends nothing twice.
  */
-export async function runDailyReminders(origin: string): Promise<{ plans: number; sent: number; skipped: number }> {
+export async function runScheduledReminders(origin: string): Promise<{ plans: number; sent: number; skipped: number }> {
   const admin = createAdminClient();
   const now = wallNow(PLAN_TIME_ZONE);
   const today = new Date(now * 60_000).toISOString().slice(0, 10);
@@ -211,12 +214,12 @@ export async function runDailyReminders(origin: string): Promise<{ plans: number
   let skipped = 0;
   for (const plan of plans) {
     plan.logs = logs.get(plan.id) ?? [];
+    if (!isWorkingTime(now, plan.doc.hours)) continue;
     for (const t of dueReminders(plan.doc, schedule(plan.doc, plan.logs), now)) {
-      const r = await sendOne(admin, plan, t.stepId, t.kind, now, directory, { origin, manual: false });
+      const r = await sendOne(admin, plan, t.stepId, t.kind, now, directory, { origin, manual: false, day: t.day });
       sent += r.sent;
       if (r.skipped) skipped++;
     }
-    if (!isWorkday(Math.floor(now / 1440), plan.doc.hours)) continue;
     for (const d of confirmDigests(plan.doc)) {
       const r = await sendConfirm(admin, plan, d.roleId, now, directory, { origin, manual: false });
       sent += r.sent;

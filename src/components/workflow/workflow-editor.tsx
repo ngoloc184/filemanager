@@ -35,7 +35,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { LIMITS, dayMark, isOverdue, nowMinutes, planRange, schedule } from "@/lib/workflow/model";
+import { LIMITS, currentStepIds, dayMark, isOverdue, nowMinutes, planRange, schedule } from "@/lib/workflow/model";
 import type { Loaded } from "@/lib/workflow/payload";
 import { WorkflowProvider, type WorkflowContextValue } from "./context";
 import { GanttView } from "./gantt-view";
@@ -49,6 +49,7 @@ import { useWorkflowSync, type ChangeInput, type SaveStatus } from "./use-workfl
 import { useReminders } from "./use-reminders";
 import { RemindDialog, type RemindMode } from "./remind-dialog";
 import { MembersDialog } from "./members-dialog";
+import { WorkflowSwitcher } from "./workflow-switcher";
 
 // React Flow measures the DOM, so the canvas renders in the browser only
 const WorkflowCanvas = dynamic(() => import("./workflow-canvas").then((m) => m.WorkflowCanvas), {
@@ -131,6 +132,8 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, signedIn, viewer
   }, [canEdit, undo, redo]);
 
   const slots = useMemo(() => schedule(doc, logs), [doc, logs]);
+  const current = useMemo(() => currentStepIds(doc, slots, now), [doc, slots, now]);
+  const currentIds = useMemo(() => new Set(current), [current]);
   const openStepPanel = useCallback((stepId: string, which: "details" | "history" = "details") => {
     setTab(which);
     setOpenStep(stepId);
@@ -139,8 +142,8 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, signedIn, viewer
   const openRoles = useCallback(() => setRolesOpen(true), []);
 
   const ctx = useMemo<WorkflowContextValue>(
-    () => ({ workflowId: id, doc, logs, slots, now, canEdit, signedIn, focusRoleId: focusRole, edit, openStep: openStepPanel, openChange, openRoles, reminders: canEdit ? reminders : null }),
-    [id, doc, logs, slots, now, canEdit, signedIn, focusRole, edit, openStepPanel, openChange, openRoles, reminders]
+    () => ({ workflowId: id, doc, logs, slots, now, canEdit, signedIn, currentIds, focusRoleId: focusRole, edit, openStep: openStepPanel, openChange, openRoles, reminders: canEdit ? reminders : null }),
+    [id, doc, logs, slots, now, canEdit, signedIn, currentIds, focusRole, edit, openStepPanel, openChange, openRoles, reminders]
   );
 
   const range = planRange(slots);
@@ -220,6 +223,7 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, signedIn, viewer
               )}
               {doc.clonedFrom && <p className="truncate px-1.5 text-[11px] text-muted-foreground">Nhân bản từ “{doc.clonedFrom.name}”</p>}
             </div>
+            {signedIn && <WorkflowSwitcher currentId={id} />}
           </div>
 
           <div role="tablist" aria-label="Chế độ xem" className="order-last flex w-full rounded-lg bg-muted p-0.5 sm:order-none sm:w-auto">
@@ -322,6 +326,31 @@ export function WorkflowEditor({ id, initial, canEdit, isOwner, signedIn, viewer
           {range && (
             <span className="tabular-nums text-muted-foreground">
               <span className="font-medium text-foreground">{fullMoment(range.start)}</span> → <span className="font-medium text-foreground">{fullMoment(range.end)}</span> · {mark(dayMark(doc, range.end))}
+            </span>
+          )}
+          {current.length > 0 && (
+            <span className="flex flex-wrap items-center gap-1">
+              <span className="inline-flex items-center gap-1.5 font-medium text-sky-700 dark:text-sky-300">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-sky-500 opacity-60 motion-reduce:animate-none" />
+                  <span className="relative inline-flex size-2 rounded-full bg-sky-500" />
+                </span>
+                Đang diễn ra:
+              </span>
+              {current.map((stepId) => {
+                const step = doc.steps.find((s) => s.id === stepId)!;
+                return (
+                  <button
+                    key={stepId}
+                    type="button"
+                    onClick={() => openStepPanel(stepId)}
+                    className="max-w-56 truncate rounded-md bg-sky-500/10 px-1.5 py-0.5 font-medium text-sky-800 ring-1 ring-sky-500/25 ring-inset hover:bg-sky-500/15 dark:text-sky-200"
+                    title={step.title || "Bước chưa đặt tên"}
+                  >
+                    {doc.steps.indexOf(step) + 1}. {step.title || "Bước chưa đặt tên"}
+                  </button>
+                );
+              })}
             </span>
           )}
           <span className="text-muted-foreground">

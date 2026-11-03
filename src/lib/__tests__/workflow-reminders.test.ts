@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { blankDoc, parseStamp, schedule, type WorkflowDoc, type WorkflowStep } from "../workflow/model.ts";
-import { buildConfirmEmail, buildReminderEmail, confirmDigests, dueReminders, longMoment, recipientsFor, reminderKind, wallNow } from "../workflow/reminders.ts";
+import { autoReminder, buildConfirmEmail, buildReminderEmail, confirmDigests, dueReminders, isWorkingTime, longMoment, recipientsFor, reminderKind, wallNow } from "../workflow/reminders.ts";
 
 // 2026-11-02 is a Monday
 const t = (s: string) => parseStamp(s);
@@ -54,22 +54,75 @@ describe("reminderKind", () => {
     assert.equal(reminderKind(done, slots.get("a"), t("2026-11-04T08:00"), doc.hours), null);
   });
 
+  it("lists a step starting today", () => {
+    assert.equal(kind("a", "2026-11-02T10:00"), "start");
+  });
+
   it("only sends a progress note by hand", () => {
-    assert.equal(kind("a", "2026-11-02T10:00"), null);
-    assert.equal(kind("a", "2026-11-02T10:00", true), "progress");
+    const d = plan([step("a", 3)]);
+    const s = schedule(d);
+    assert.equal(reminderKind(d.steps[0], s.get("a"), t("2026-11-03T10:00"), d.hours), null);
+    assert.equal(reminderKind(d.steps[0], s.get("a"), t("2026-11-03T10:00"), d.hours, true), "progress");
     assert.equal(kind("c", "2026-11-02T10:00", true), "upcoming");
   });
 });
 
+const day = (s: string) => Math.floor(t(`${s}T00:00`) / 1440);
+
+describe("autoReminder", () => {
+  it("reminds a step in days on its start day and, when longer than a day, on its due day", () => {
+    // a: Mon–Wed (3 d), b: Thu (1 d)
+    const doc = plan([step("a", 3), step("b", 1)]);
+    const slots = schedule(doc);
+    const at = (id: string, now: string) => autoReminder(doc.steps.find((s) => s.id === id)!, slots.get(id), t(now), doc.hours);
+    assert.deepEqual(at("a", "2026-11-02T08:00"), { kind: "start", day: day("2026-11-02") });
+    assert.equal(at("a", "2026-11-03T08:00"), null);
+    assert.deepEqual(at("a", "2026-11-04T08:00"), { kind: "due", day: day("2026-11-04") });
+    // a one-day step: only the start
+    assert.deepEqual(at("b", "2026-11-05T08:00"), { kind: "start", day: day("2026-11-05") });
+    assert.equal(at("b", "2026-11-04T16:00"), null);
+    assert.deepEqual(at("a", "2026-11-05T09:00"), { kind: "overdue", day: day("2026-11-05") });
+  });
+
+  it("reminds a step in hours in its first hour and in its last hour", () => {
+    // a: Mon 08:00–11:00 (3 h), b: 11:00–12:00 (1 h)
+    const doc = plan([step("a", 3, { duration: { amount: 3, unit: "h" } }), step("b", 1, { duration: { amount: 1, unit: "h" } })]);
+    const slots = schedule(doc);
+    const at = (id: string, now: string) => autoReminder(doc.steps.find((s) => s.id === id)!, slots.get(id), t(now), doc.hours)?.kind ?? null;
+    assert.equal(at("a", "2026-11-02T07:00"), null);
+    assert.equal(at("a", "2026-11-02T08:00"), "start");
+    assert.equal(at("a", "2026-11-02T09:00"), null);
+    assert.equal(at("a", "2026-11-02T10:00"), "due");
+    assert.equal(at("b", "2026-11-02T11:00"), "start");
+    // a one-hour step gets its end reminder at the deadline
+    assert.equal(at("b", "2026-11-02T12:00"), "due");
+    assert.equal(at("a", "2026-11-02T13:00"), "overdue");
+  });
+
+  it("sends nothing for a done step", () => {
+    const doc = plan([step("a", 1, { status: "done" })]);
+    assert.equal(autoReminder(doc.steps[0], schedule(doc).get("a"), t("2026-11-02T08:00"), doc.hours), null);
+  });
+});
+
 describe("dueReminders", () => {
-  it("lists today's reminders and sends none on days off", () => {
+  it("lists the reminders due now, only inside working hours", () => {
     const doc = plan([step("a", 2), step("b", 1)]);
     const slots = schedule(doc);
-    assert.deepEqual(dueReminders(doc, slots, t("2026-11-03T08:00")), [
-      { stepId: "a", kind: "due" },
-      { stepId: "b", kind: "upcoming" },
+    assert.deepEqual(dueReminders(doc, slots, t("2026-11-03T08:00")), [{ stepId: "a", kind: "due", day: day("2026-11-03") }]);
+    assert.deepEqual(dueReminders(doc, slots, t("2026-11-04T09:00")), [
+      { stepId: "a", kind: "overdue", day: day("2026-11-04") },
+      { stepId: "b", kind: "start", day: day("2026-11-04") },
     ]);
+    assert.deepEqual(dueReminders(doc, slots, t("2026-11-03T07:00")), []); // before work
+    assert.deepEqual(dueReminders(doc, slots, t("2026-11-03T12:00")), []); // lunch
     assert.deepEqual(dueReminders(doc, slots, t("2026-11-07T08:00")), []); // Saturday
+  });
+
+  it("knows the working hours", () => {
+    const { hours } = plan([]);
+    assert.ok(isWorkingTime(t("2026-11-02T08:00"), hours));
+    assert.ok(!isWorkingTime(t("2026-11-02T17:00"), hours));
   });
 });
 
@@ -97,6 +150,12 @@ describe("buildReminderEmail", () => {
     assert.ok(mail.text.includes("Hạn hoàn thành: Thứ ba, 03/11/2026 lúc 17:00 (T+2)"));
     assert.ok(mail.text.includes("Xem chi tiết: https://app.example/workflow/x"));
     assert.ok(mail.text.includes("Trân trọng,\nHệ thống Workflow"));
+  });
+
+  it("tells the team a step has started", () => {
+    const mail = buildReminderEmail({ ...base, kind: "start", now: t("2026-11-02T08:00") });
+    assert.match(mail.subject, /^\[Nhắc việc\] Bắt đầu công việc: Bước 1 – /);
+    assert.ok(mail.text.includes("đã đến thời gian bắt đầu công việc"));
   });
 
   it("says how late an overdue step is, in working time", () => {

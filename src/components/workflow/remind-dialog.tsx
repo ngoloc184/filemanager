@@ -14,6 +14,7 @@ import type { RemindResult } from "./use-reminders";
 export const KIND_TEXT: Record<ReminderKind | "confirm", { label: string; className: string }> = {
   confirm: { label: "Xác nhận timeline", className: "bg-primary/10 text-primary" },
   upcoming: { label: "Sắp bắt đầu", className: "bg-violet-500/10 text-violet-700 dark:text-violet-300" },
+  start: { label: "Bắt đầu hôm nay", className: "bg-sky-500/10 text-sky-700 dark:text-sky-300" },
   due: { label: "Đến hạn hôm nay", className: "bg-amber-500/12 text-amber-800 dark:text-amber-300" },
   overdue: { label: "Trễ hạn", className: "bg-rose-500/10 text-rose-700 dark:text-rose-300" },
   progress: { label: "Đang thực hiện", className: "bg-sky-500/10 text-sky-700 dark:text-sky-300" },
@@ -74,8 +75,8 @@ export function RemindDialog({ mode, onClose }: { mode: RemindMode | null; onClo
           </DialogTitle>
           <DialogDescription>
             {mode === "confirm"
-              ? "Mỗi vai trò nhận một email liệt kê các bước của mình chưa chốt timeline, đề nghị kiểm tra, chỉnh số ngày nếu cần và bấm Xác nhận. Hệ thống tự gửi lúc 08:00 mỗi ngày làm việc cho tới khi chốt xong; nút dưới đây gửi ngay."
-              : "Email gửi tới vai trò PIC của các bước sắp bắt đầu (ngày làm việc kế tiếp), đến hạn hôm nay hoặc trễ hạn mà chưa hoàn thành. Hệ thống tự gửi lúc 08:00 mỗi ngày làm việc; nút dưới đây gửi ngay."}
+              ? "Mỗi vai trò nhận một email liệt kê các bước của mình chưa chốt timeline, đề nghị kiểm tra, chỉnh số ngày nếu cần và bấm Xác nhận. Hệ thống tự gửi một lần vào đầu giờ làm việc mỗi ngày cho tới khi chốt xong; nút dưới đây gửi ngay."
+              : "Email gửi tới vai trò PIC của các bước chưa hoàn thành. Hệ thống kiểm tra mỗi giờ trong giờ làm việc: bước tính theo ngày được nhắc vào ngày bắt đầu và ngày đến hạn (nếu dài hơn 1 ngày); bước tính theo giờ được nhắc lúc bắt đầu và trong giờ cuối trước hạn; bước trễ hạn được nhắc mỗi ngày. Nút dưới đây gửi ngay."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid max-h-[60vh] gap-5 overflow-y-auto px-5 py-4">
@@ -133,7 +134,7 @@ export function RemindDialog({ mode, onClose }: { mode: RemindMode | null; onClo
               ))}
             </ul>
           ) : (
-            <p className="rounded-lg border border-dashed px-3 py-3 text-center text-xs text-muted-foreground">Hôm nay không có bước nào sắp bắt đầu, đến hạn hay trễ hạn.</p>
+            <p className="rounded-lg border border-dashed px-3 py-3 text-center text-xs text-muted-foreground">Hôm nay không có bước nào bắt đầu, sắp bắt đầu, đến hạn hay trễ hạn.</p>
           )}
           </section>
           )}

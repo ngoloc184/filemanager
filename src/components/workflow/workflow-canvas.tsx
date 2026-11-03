@@ -21,7 +21,7 @@ import {
 } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { LayoutGrid, MousePointerClick, Plus, Workflow as WorkflowIcon, X } from "lucide-react";
+import { Crosshair, LayoutGrid, MousePointerClick, Plus, Workflow as WorkflowIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LIMITS, NODE_H, NODE_W, autoLayout, connectSteps, isOverdue, makeStep, removeSteps, topoOrder } from "@/lib/workflow/model";
 import { useWorkflow } from "./context";
@@ -67,7 +67,7 @@ function sides(a: { x: number; y: number }, b: { x: number; y: number }) {
 type AnyNode = StepFlowNode | Node<Record<string, never>, "start" | "end">;
 
 function Canvas() {
-  const { doc, slots, now, canEdit, edit, openStep } = useWorkflow();
+  const { doc, slots, now, canEdit, currentIds, edit, openStep } = useWorkflow();
   const { screenToFlowPosition, fitView, getNodes } = useReactFlow();
   const { resolvedTheme } = useTheme();
   const wrapper = useRef<HTMLDivElement>(null);
@@ -121,6 +121,7 @@ function Canvas() {
       if (!a || !b) continue;
       const [sourceHandle, targetHandle] = sides(a, b);
       const late = isOverdue(byId.get(e.source)!, slots.get(e.source), now);
+      const active = currentIds.has(e.target);
       const selected = e.id === selectedEdge;
       out.push({
         id: e.id,
@@ -131,8 +132,9 @@ function Canvas() {
         type: "flow",
         selected,
         selectable: canEdit,
-        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: selected ? "var(--primary)" : "#94a3b8" },
-        data: { onDelete: removeEdge, late },
+        animated: active && !late,
+        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: selected ? "var(--primary)" : active && !late ? "#0ea5e9" : "#94a3b8" },
+        data: { onDelete: removeEdge, late, active },
       } satisfies FlowEdge);
     }
     // dashed guides from the start pill and into the finish pill
@@ -152,7 +154,7 @@ function Canvas() {
       out.push({ ...guide, id: `g_end_${id}`, source: id, target: END_ID, sourceHandle: above ? "s-b" : "s-r", targetHandle: above ? "t-t" : "t-l" });
     }
     return out;
-  }, [nodes, doc.edges, doc.steps, slots, selectedEdge, removeEdge, canEdit, roots, sinks, now]);
+  }, [nodes, doc.edges, doc.steps, slots, selectedEdge, removeEdge, canEdit, roots, sinks, now, currentIds]);
 
   const onConnect = useCallback(
     (c: Connection) => {
@@ -223,16 +225,24 @@ function Canvas() {
     [edit]
   );
 
-  // fit once the cards are measured; a phone shows the start of the plan at a readable size
+  /** Brings the steps under way into view. */
+  const showCurrent = useCallback(
+    (duration = 400) => fitView({ nodes: [...currentIds].map((id) => ({ id })), padding: FIT_PADDING, maxZoom: 1, duration }),
+    [currentIds, fitView]
+  );
+
+  // fit once the cards are measured; a phone shows the stage under way (else the start) at a readable size
   const fitted = useRef(false);
   useEffect(() => {
     if (fitted.current || !nodes.length || !nodes.every((n) => n.measured)) return;
     fitted.current = true;
     const narrow = (wrapper.current?.clientWidth ?? 1000) < 640;
     const first = getNodes().find((n) => n.type === "step");
-    if (narrow && first) fitView({ nodes: [{ id: START_ID }, { id: first.id }], padding: FIT_PADDING, maxZoom: 0.85 });
+    const current = [...currentIds][0];
+    if (narrow && current) fitView({ nodes: [{ id: current }], padding: FIT_PADDING, maxZoom: 0.85 });
+    else if (narrow && first) fitView({ nodes: [{ id: START_ID }, { id: first.id }], padding: FIT_PADDING, maxZoom: 0.85 });
     else fitView({ padding: FIT_PADDING, maxZoom: 1 });
-  }, [nodes, fitView, getNodes]);
+  }, [nodes, fitView, getNodes, currentIds]);
 
   const [hint, setHint] = useState(false);
   useEffect(() => {
@@ -302,6 +312,13 @@ function Canvas() {
             </Button>
             <Button size="sm" variant="outline" onClick={tidy} disabled={doc.steps.length < 2} className="shadow-sm">
               <LayoutGrid /> Sắp xếp gọn
+            </Button>
+          </Panel>
+        )}
+        {currentIds.size > 0 && (
+          <Panel position="top-right">
+            <Button size="sm" variant="outline" onClick={() => showCurrent()} className="bg-background shadow-sm" title="Đưa các bước đang diễn ra vào giữa màn hình">
+              <Crosshair className="text-sky-600 dark:text-sky-400" /> Bước đang diễn ra
             </Button>
           </Panel>
         )}

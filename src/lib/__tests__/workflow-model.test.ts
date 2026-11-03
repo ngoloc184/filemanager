@@ -7,10 +7,12 @@ import {
   blankDoc,
   cloneDoc,
   connectSteps,
+  currentStepIds,
   dayMark,
   defaultStart,
   formatStamp,
   isOverdue,
+  makeStep,
   mergeDocs,
   minutesPerDay,
   normalizeStart,
@@ -284,5 +286,33 @@ describe("example and copies", () => {
     assert.ok(c.steps.every((s) => s.status === "todo" && s.confirmed === null));
     assert.deepEqual(c.clonedFrom, { name: "Quy trình gốc" }); // no id: it would open the source
     assert.equal(d.steps[0].status, "done"); // the source is untouched
+  });
+});
+
+describe("currentStepIds", () => {
+  const doc = {
+    ...blankDoc("2026-11-02"),
+    start: "2026-11-02T08:00",
+    steps: [
+      { ...makeStep({ x: 0, y: 0 }), id: "a", duration: { amount: 1, unit: "d" as const } },
+      { ...makeStep({ x: 0, y: 0 }), id: "b", duration: { amount: 1, unit: "d" as const } },
+      { ...makeStep({ x: 0, y: 0 }), id: "c", duration: { amount: 1, unit: "d" as const } },
+    ],
+    edges: [
+      { id: "e1", source: "a", target: "b" },
+      { id: "e2", source: "b", target: "c" },
+    ],
+  };
+  const at = (d: typeof doc, now: string) => currentStepIds(d, schedule(d), parseStamp(now));
+
+  it("is the step whose slot holds now", () => {
+    assert.deepEqual(at(doc, "2026-11-03T10:00"), ["b"]);
+    assert.deepEqual(at(doc, "2026-10-30T10:00"), []);
+  });
+
+  it("counts a step marked doing, not a done or late one", () => {
+    const d = { ...doc, steps: doc.steps.map((s) => (s.id === "a" ? { ...s, status: "done" as const } : s.id === "c" ? { ...s, status: "doing" as const } : s)) };
+    assert.deepEqual(at(d, "2026-11-02T10:00"), ["c"]);
+    assert.deepEqual(at(doc, "2026-11-05T10:00"), []); // all overdue
   });
 });
