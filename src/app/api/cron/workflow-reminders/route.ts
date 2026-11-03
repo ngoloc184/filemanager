@@ -9,8 +9,10 @@ export const maxDuration = 60;
 const json = (body: Record<string, unknown>, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
 /**
- * GET|POST /api/cron/workflow-reminders — the workflow e-mails, called every hour by Vercel Cron
- * (GET with `Authorization: Bearer $CRON_SECRET`) or another scheduler (`x-cron-secret`), to the
+ * GET|POST /api/cron/workflow-reminders — the workflow e-mails, called once an hour through the
+ * working day by Vercel Cron (one daily entry per hour in vercel.json, as Hobby allows daily
+ * expressions only; GET with `Authorization: Bearer $CRON_SECRET`) or another scheduler
+ * (`x-cron-secret`), to the
  * addresses of each step's PIC roles, inside the plan's working hours: a step in days on its start
  * day and on its due day (steps longer than one day); a step in hours in its first hour and in its
  * last hour before the deadline; overdue and not done once a day. Each step, kind and day is mailed

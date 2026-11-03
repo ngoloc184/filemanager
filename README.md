@@ -298,9 +298,10 @@ app password). Set on the server only: `SMTP_HOST`, `SMTP_PORT` (587), `SMTP_SEC
 for port 465), `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (e.g. `Workflow <workflow@company.com>`),
 and optionally `APP_URL` (the link in the e-mails; defaults to the Vercel production domain)
 and `WORKFLOW_TIME_ZONE` (default `Asia/Ho_Chi_Minh`). The run is the
-`/api/cron/workflow-reminders` cron in `vercel.json`, every hour (`0 * * * *`); it sends only
-inside each plan's working hours. Hourly crons need a Vercel plan that allows them; elsewhere,
-call the route every hour from another scheduler with `x-cron-secret`.
+`/api/cron/workflow-reminders` route, called once an hour through the working day; it sends
+only inside each plan's working hours. Vercel Hobby allows only daily cron expressions, so
+`vercel.json` lists the route ten times, once a day each at 01:00 … 10:00 UTC (08:00 … 17:00 in
+Vietnam; Hobby fires each within its hour). On Vercel Pro one `0 * * * *` entry can replace them.
 
 ### Other Platforms
 
